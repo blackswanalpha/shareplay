@@ -1,0 +1,1 @@
+SharePlay is a real-time collaborative platform for synchronized entertainment. Watch videos, listen to music, and play games together with friends. Features live chat, room management, seamless auth, and instant WebSocket synchronization. Built with Next.js and modern UI/UX design for virtual watch parties and social gaming ap.

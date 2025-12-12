@@ -1,0 +1,362 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+}
+
+.urlInput {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.inputWrapper {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+}
+
+.inputIcon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+}
+
+.input {
+    padding-left: 44px;
+}
+
+.playlistToggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.playlistToggle:hover,
+.playlistToggle.active {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #8b5cf6;
+}
+
+.playlistCount {
+    background: rgba(139, 92, 246, 0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Main Area */
+.mainArea {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    min-height: 400px;
+}
+
+.videoContainer {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+}
+
+.video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border: none;
+}
+
+.placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748b;
+    text-align: center;
+    gap: 12px;
+}
+
+.placeholderIcon {
+    color: #8b5cf6;
+    opacity: 0.5;
+}
+
+.placeholder h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.placeholder p {
+    font-size: 0.9rem;
+}
+
+/* Playlist Sidebar */
+.playlistSidebar {
+    width: 280px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.playlistHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.playlistHeader h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f8fafc;
+}
+
+.itemCount {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.emptyPlaylist {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #64748b;
+    text-align: center;
+    padding: 24px;
+}
+
+.emptyPlaylist p {
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.emptyPlaylist span {
+    font-size: 0.8rem;
+}
+
+.playlistItems {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.playlistItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    transition: background 0.2s ease;
+}
+
+.playlistItem:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.playlistItem.playing {
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.playlistItemPlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(139, 92, 246, 0.2);
+    border: none;
+    border-radius: 50%;
+    color: #8b5cf6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.playlistItemPlay:hover {
+    background: #8b5cf6;
+    color: white;
+}
+
+.playlistItemInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.playlistItemTitle {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.playlistItemType {
+    font-size: 0.7rem;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.playlistItemRemove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.playlistItem:hover .playlistItemRemove {
+    opacity: 1;
+}
+
+.playlistItemRemove:hover {
+    color: #ef4444;
+}
+
+/* Controls */
+.controls {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.controlsRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.controlButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    color: #f8fafc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.controlButton:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.progressContainer {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.time {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    min-width: 45px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.progressBar {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.progressBar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #8b5cf6;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.progressBar::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Sync Status */
+.syncStatus {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #22c55e;
+    width: fit-content;
+}
+
+.syncDot {
+    width: 8px;
+    height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@media (max-width: 768px) {
+    .mainArea {
+        flex-direction: column;
+    }
+
+    .playlistSidebar {
+        width: 100%;
+        max-height: 300px;
+    }
+}
