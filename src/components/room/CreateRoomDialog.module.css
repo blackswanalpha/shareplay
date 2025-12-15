@@ -6,8 +6,9 @@
     display: block;
     font-size: 0.9rem;
     font-weight: 500;
-    color: #f8fafc;
+    color: #c0c0c0; /* Lighter grey for labels */
     margin-bottom: 8px;
+    font-family: var(--font-body);
 }
 
 .typeGrid {
@@ -25,34 +26,59 @@
     background: rgba(255, 255, 255, 0.05);
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
-    color: #94a3b8;
+    color: #a0a0a0; /* Default icon/text color */
     cursor: pointer;
     transition: all 0.3s ease;
+    font-family: var(--font-body);
+    position: relative;
+    overflow: hidden;
 }
 
 .typeButton:hover {
     background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: #f8fafc;
+    border-color: rgba(59, 130, 246, 0.3); /* Blue hover border */
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 .typeButton.selected {
-    background: color-mix(in srgb, var(--type-color) 15%, transparent);
+    background: color-mix(in srgb, var(--type-color) 20%, transparent);
     border-color: var(--type-color);
-    color: var(--type-color);
+    color: #ffffff; /* White text when selected */
+    box-shadow: 0 0 25px color-mix(in srgb, var(--type-color) 40%, transparent);
+    animation: pulseBorder 1.5s infinite alternate;
+}
+
+@keyframes pulseBorder {
+    0% {
+        box-shadow: 0 0 25px color-mix(in srgb, var(--type-color) 40%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 35px color-mix(in srgb, var(--type-color) 60%, transparent);
+    }
 }
 
 .typeButton span {
     font-size: 0.85rem;
     font-weight: 500;
+    z-index: 1; /* Ensure text is above pseudo-elements */
+}
+
+.typeButton svg {
+    z-index: 1;
+    color: inherit; /* Inherit color from parent */
 }
 
 /* Success State */
 .successCard {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03); /* Frosted glass effect */
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 24px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    text-align: center;
 }
 
 .roomInfo {
@@ -67,15 +93,17 @@
 .roomLabel,
 .codeLabel {
     font-size: 0.8rem;
-    color: #64748b;
+    color: #94a3b8; /* Muted text color */
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    font-family: var(--font-body);
 }
 
 .roomValue {
     font-size: 1.1rem;
     font-weight: 600;
     color: #f8fafc;
+    font-family: var(--font-body);
 }
 
 .codeContainer {
@@ -88,18 +116,19 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(139, 92, 246, 0.1);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(59, 130, 246, 0.15); /* Blue background for code */
+    border: 1px solid rgba(59, 130, 246, 0.4); /* Blue border */
     border-radius: 12px;
     padding: 16px 20px;
 }
 
 .code {
-    font-size: 1.75rem;
+    font-size: 2rem;
     font-weight: 700;
-    font-family: monospace;
+    font-family: var(--font-heading); /* Using heading font for emphasis */
     letter-spacing: 4px;
-    color: #8b5cf6;
+    color: #22d3ee; /* Vibrant cyan for code */
+    text-shadow: 0 0 15px rgba(34, 211, 238, 0.7);
 }
 
 .copyButton {
@@ -110,11 +139,12 @@
     color: #94a3b8;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-family: var(--font-body);
 }
 
 .copyButton:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #f8fafc;
+    background: rgba(59, 130, 246, 0.3); /* Blue tint on hover */
+    color: #ffffff;
 }
 
 /* Privacy Options */
@@ -129,21 +159,23 @@
     align-items: center;
     gap: 14px;
     padding: 14px 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05); /* Slightly more opaque glass */
+    border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-family: var(--font-body);
 }
 
 .privacyOption:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(59, 130, 246, 0.3); /* Blue hover border */
 }
 
 .privacyOption.selected {
-    background: rgba(139, 92, 246, 0.08);
-    border-color: rgba(139, 92, 246, 0.4);
+    background: rgba(59, 130, 246, 0.15); /* Blue tint when selected */
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
 }
 
 .radioInput {
@@ -156,15 +188,15 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
-    color: #64748b;
+    color: #94a3b8; /* Muted icon color */
     transition: all 0.2s ease;
 }
 
 .privacyOption.selected .radioButton {
-    background: rgba(139, 92, 246, 0.2);
-    color: #8b5cf6;
+    background: rgba(59, 130, 246, 0.3); /* Blue tint when selected */
+    color: #ffffff; /* White icon when selected */
 }
 
 .privacyText {
@@ -177,9 +209,11 @@
     font-size: 0.95rem;
     font-weight: 500;
     color: #f8fafc;
+    font-family: var(--font-body);
 }
 
 .privacyDesc {
     font-size: 0.8rem;
-    color: #64748b;
+    color: #94a3b8; /* Muted text color */
+    font-family: var(--font-body);
 }

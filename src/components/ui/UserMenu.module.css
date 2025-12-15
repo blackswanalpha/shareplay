@@ -1,0 +1,118 @@
+.userMenuContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.userMenuButton {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.08); /* Frosted glass look */
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 100px; /* Pill shape */
+    padding: 8px 15px 8px 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    font-family: var(--font-body); /* Added for Be Vietnam Pro */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+.userMenuButton:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(59, 130, 246, 0.4); /* Blue hover border */
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid #3b82f6; /* Blue border */
+    object-fit: cover;
+}
+
+.userName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px; /* Limit width */
+}
+
+.dropdownIcon {
+    margin-left: 5px;
+    transition: transform 0.3s ease;
+}
+
+.dropdownIcon.open {
+    transform: rotate(180deg);
+}
+
+.dropdownMenu {
+    position: absolute;
+    top: calc(100% + 10px); /* Position below the button */
+    right: 0;
+    background: rgba(13, 18, 28, 0.9); /* Darker blue background */
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 15px;
+    min-width: 180px;
+    padding: 10px 0;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    overflow: hidden;
+    transform-origin: top right;
+    animation: fadeInScale 0.2s ease-out forwards;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    color: #c0c0c0;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    font-family: var(--font-body); /* Added for Be Vietnam Pro */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+.menuItem:hover {
+    background: rgba(59, 130, 246, 0.15); /* Light blue hover */
+    color: #ffffff;
+}
+
+.menuItem svg {
+    color: #94a3b8; /* Default icon color */
+}
+
+.menuItem:hover svg {
+    color: #ffffff; /* White icon on hover */
+}

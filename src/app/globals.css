@@ -1,42 +1,60 @@
 /* Google Fonts Import */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;900&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
-  /* Color Palette - Premium Dark Theme */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-card: rgba(20, 20, 30, 0.7);
-  --bg-card-hover: rgba(30, 30, 45, 0.8);
+  /* Vivid Color Palette */
+  /* Vivid Color Palette - Blue Theme */
+  --primary: #3b82f6;
+  /* Blue 500 */
+  --bg-deep: #0f172a;
+  /* Slate 900 */
+  --bg-gradient: radial-gradient(circle at 50% 30%, #1e3a8a 0%, #0f172a 100%);
+  /* Blue 900 to Slate 900 */
 
-  /* Accent Colors - Vibrant Gradient */
-  --accent-primary: #8b5cf6;
-  --accent-secondary: #06b6d4;
-  --accent-pink: #ec4899;
+  /* Neon Accents */
+  --accent-vivid: #06b6d4;
+  /* Cyan 500 */
+  --accent-secondary: #0ea5e9;
+  /* Sky 500 */
+  --accent-glow: rgba(6, 182, 212, 0.5);
+  /* Cyan glow */
+  --primary-glow: rgba(59, 130, 246, 0.5);
+  /* Blue glow */
+
+  /* Glassmorphism Levels */
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-surface: rgba(255, 255, 255, 0.03);
+  --glass-surface-hover: rgba(255, 255, 255, 0.08);
+  --glass-panel: rgba(18, 18, 24, 0.4);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 
   /* Text Colors */
-  --text-primary: #f8fafc;
+  --text-primary: #ffffff;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  /* Glassmorphism Levels */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-surface: rgba(255, 255, 255, 0.03);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 
   /* Fonts */
-  --font-sans: 'Inter', var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), 'SF Mono', monospace;
+  /* Fonts */
+  --font-heading: 'Be Vietnam Pro', sans-serif;
+  --font-body: 'Be Vietnam Pro', sans-serif;
+  --font-display: 'Be Vietnam Pro', sans-serif;
 
   /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-elastic: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-juicy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-base: 250ms var(--ease-elastic);
 
-  /* Border Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-full: 9999px;
+  /* Radius */
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
 }
 
 *,
@@ -53,164 +71,129 @@ html {
 }
 
 body {
-  font-family: var(--font-be-vietnam-pro), system-ui, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
+  color: #ffffff;
   line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  min-height: 100vh;
 }
 
-/* Utility Classes */
-.gradient-text {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary), var(--accent-pink));
+/* Typography Overrides */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+/* Artistic Text Utility */
+.artistic-text {
+  background: linear-gradient(135deg, #fff 30%, #a78bfa 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-shadow: 0 0 30px rgba(167, 139, 250, 0.3);
 }
 
-/* Glassmorphism Card */
+/* Enhanced Glass Card */
 .glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--glass-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
+  box-shadow: inset 0 0 0 1px var(--glass-highlight), var(--glass-shadow);
   border-radius: var(--radius-lg);
-  box-shadow: var(--glass-shadow);
 }
 
-/* Button Base Styles */
+/* Neon Button Styles */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 16px 32px;
-  font-size: 1rem;
+  gap: 10px;
+  padding: 12px 24px;
+  font-family: var(--font-heading);
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-base);
-  text-decoration: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: var(--text-primary);
-  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, var(--accent-vivid), #5b21b6);
+  color: white;
+  box-shadow: 0 4px 20px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 8px 30px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  filter: brightness(1.1);
 }
 
-.btn-google {
-  background: var(--text-primary);
-  color: #1f1f1f;
-  font-weight: 500;
-  padding: 14px 28px;
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+.btn-primary:active {
+  transform: translateY(0);
 }
 
-.btn-google:hover {
-  background: #f1f5f9;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-}
-
-.btn-google svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.8s ease-out forwards;
-}
-
-.animate-delay-100 {
-  animation-delay: 100ms;
-}
-
-.animate-delay-200 {
-  animation-delay: 200ms;
-}
-
-.animate-delay-300 {
-  animation-delay: 300ms;
-}
-
-.animate-delay-400 {
-  animation-delay: 400ms;
-}
-
-/* Focus States for Accessibility */
-:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
-}
-
-/* Selection */
-::selection {
-  background: var(--accent-primary);
-  color: var(--text-primary);
-}
-
-/* Custom Global Scrollbar */
+/* Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  border: 2px solid var(--bg-primary);
-  /* efficient floating effect */
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Global Animations */
+@keyframes glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-glow {
+  animation: glow 3s infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
 }

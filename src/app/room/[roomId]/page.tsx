@@ -1,73 +1,75 @@
 "use client";
 
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useUser, useClerk } from "@clerk/nextjs";
 import Link from "next/link";
-import { Play, Music, Gamepad2, Users, Copy, Check, ArrowLeft, Crown, MonitorPlay, LogOut, Settings, User, AlertTriangle } from "lucide-react";
+import { Play, Music, Gamepad2, Users, Copy, Check, ArrowLeft, Crown, MonitorPlay, LogOut, Settings, User, AlertTriangle, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/Dialog";
 import VideoPlayer from "@/components/room/VideoPlayer";
 import MusicPlayer from "@/components/room/MusicPlayer";
 import GamesSection from "@/components/room/GamesSection";
-import ChatSidebar from "@/components/room/ChatSidebar";
+import ChatSidebar, { Participant } from "@/components/room/ChatSidebar";
 import RoomSettingsDialog from "@/components/room/RoomSettingsDialog";
+import RoomHeader from "@/components/room/RoomHeader";
+import RoomMainContent from "@/components/room/RoomMainContent";
+import { useWebRTCMesh } from "@/hooks/useWebRTCMesh";
+import { sessionManager } from "@/lib/sessionManager";
+import { api } from "@/lib/api";
+import { type Room } from "@/lib/api";
+import { VideoPlaylistState } from "@/components/room/VideoPlayer"; // Import VideoPlaylistState
 import styles from "./page.module.css";
 
 type ActiveTab = "video" | "music" | "games";
 
-interface RoomConfig {
+export interface RoomConfig {
+    id: number;
     name: string;
     type: string;
     features: {
+        chat: boolean;
         video: boolean;
         music: boolean;
         games: boolean;
     };
     createdAt: number;
     hostId: string;
+    hostEmail?: string;
+    coHosts?: string[]; // Array of co-host emails
 }
-
-interface TabButtonProps {
-    icon: React.ReactNode;
-    label: string;
-    active: boolean;
-    onClick: () => void;
-}
-
-const TabButton = ({ icon, label, active, onClick }: TabButtonProps) => {
-    return (
-        <button
-            onClick={onClick}
-            className={`${styles.tabButton} ${active ? styles.active : ""} `}
-        >
-            {icon}
-            {label}
-        </button>
-    );
-};
-
 export default function RoomPage() {
     const params = useParams();
     const router = useRouter();
-    const { data: session, status } = useSession();
+    const { user, isLoaded } = useUser();
+    const { signOut } = useClerk();
     const roomId = params.roomId as string;
-
     const [activeTab, setActiveTab] = useState<ActiveTab>("video");
     const [copied, setCopied] = useState(false);
     const [roomConfig, setRoomConfig] = useState<RoomConfig | null>(null);
     const [onlineCount, setOnlineCount] = useState(3);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
-
+    const [showEndRoomConfirm, setShowEndRoomConfirm] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isConnected, setIsConnected] = useState(false);
     const [availableTabs, setAvailableTabs] = useState<ActiveTab[]>([]);
-
+    const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
+    // Voice Chat State
+    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+    const [isMicOn, setIsMicOn] = useState(false);
     // Centralized State
-    const [messages, setMessages] = useState<any[]>([]);
-    const [participants, setParticipants] = useState<string[]>([]);
+    const [messages, setMessages] = useState<{ id: string; user: string; text: string; timestamp: Date }[]>([]);
+    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [micStatuses, setMicStatuses] = useState<{ [userName: string]: boolean }>({});
+    const [sessionRestored, setSessionRestored] = useState(false);
+    const [restoredData, setRestoredData] = useState<{
+        chatMessages: number;
+        videoState: boolean;
+        musicState: boolean;
+    }>({ chatMessages: 0, videoState: false, musicState: false });
     const [videoState, setVideoState] = useState({
         url: "",
         isPlaying: false,
@@ -75,100 +77,666 @@ export default function RoomPage() {
         timestamp: 0
     });
 
+    const [videoPlaylistState, setVideoPlaylistState] = useState<VideoPlaylistState>({
+        playlist: [],
+        current_index: 0,
+        loop: false,
+        shuffle: false,
+    });
+
+    const [musicState, setMusicState] = useState({
+        track: null,
+        isPlaying: false,
+        currentTime: 0,
+        volume: 0.75,
+        timestamp: 0
+    });
+
+    const isHost = roomConfig?.hostEmail === user?.primaryEmailAddress?.emailAddress; // Fixed: compare email with email, not email with id
+    const isCoHost = roomConfig?.coHosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
+    const isHostOrCoHost = isHost || isCoHost;
+
     const wsRef = useRef<WebSocket | null>(null);
+    const fetchRoomDetailsRef = useRef<(() => Promise<Room | null>) | undefined>(undefined);
+    const isLeavingRoomRef = useRef(false);
+
+    // Extract fetchRoomDetails to be reusable
+    const fetchRoomDetails = useCallback(async (): Promise<Room | null> => {
+        try {
+            // Try API first
+            const { api } = await import("@/lib/api");
+            const room = await api.getRoom(roomId);
+
+            const tabs: ActiveTab[] = [];
+            if (room.has_video) tabs.push("video");
+            if (room.has_music) tabs.push("music");
+            if (room.has_games) tabs.push("games");
+
+            setAvailableTabs(tabs);
+            if (tabs.length > 0) setActiveTab(tabs[0]);
+
+            setRoomConfig({
+                id: room.id,
+                name: room.name,
+                features: { chat: true, video: room.has_video, music: room.has_music, games: room.has_games },
+                createdAt: new Date(room.created_at).getTime(),
+                hostId: room.host_id.toString(),
+                hostEmail: room.host_email,
+                coHosts: room.co_hosts || [],
+                type: "custom"
+            });
+
+            // After setting room config, request current video state if we're not the host
+            const isCurrentUserHost = room.host_email === user?.primaryEmailAddress?.emailAddress;
+            const isCurrentUserCoHost = room.co_hosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
+
+            // Update user role in online users list if they are already there
+            // This is just a local optimistic update, the real source of truth is the WebSocket
+            setOnlineCount(prev => prev); // Trigger re-render
+
+            // Notify backend about our presence (HTTP fallback/init)
+            try {
+                // If we are joining as a new user, we might want to announce it
+                // But typically WebSocket handles this. 
+                // However, for initial state, we just fetched the room.
+
+                // Track usage
+                api.trackRoomJoin(roomId, {
+                    user_email: user?.primaryEmailAddress?.emailAddress || 'guest',
+                    requesting_user: user?.fullName || 'Guest'
+                }).catch((err: any) => console.error("Tracking error:", err));
+
+            } catch (e) {
+                // Ignore tracking errors
+            }
+
+            // Sync video state if needed (and we are not host)
+            if (!isCurrentUserHost && room.current_video_url) {
+                // ... sync logic
+            }
+
+            if (!isCurrentUserHost) {
+                // Request video state with a short delay to ensure WebSocket is ready
+                setTimeout(() => {
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({
+                            type: "request_video_state",
+                            requesting_user: user?.fullName || 'Guest'
+                        }));
+                    }
+                }, 100);
+
+                // Retry after 2 seconds if no video is loaded (fallback)
+                setTimeout(() => {
+                    if (wsRef.current?.readyState === WebSocket.OPEN && !videoState.url) {
+                        wsRef.current.send(JSON.stringify({
+                            type: "request_video_state",
+                            requesting_user: user?.fullName || 'Guest'
+                        }));
+                    }
+                }, 2000);
+            }
+            return room;
+        } catch (error) {
+            console.error("Failed to fetch room from API", error);
+            // Fallback logic could go here
+            return null;
+        }
+    }, [roomId, user?.id, videoState.url]);
+
+    // Update the ref whenever the function changes
+    useEffect(() => {
+        fetchRoomDetailsRef.current = fetchRoomDetails;
+    }, [fetchRoomDetails]);
+
+    const handleVideoPlaylistChange = useCallback((newPlaylistState: VideoPlaylistState, shouldSync: boolean = true) => {
+        setVideoPlaylistState(newPlaylistState);
+
+        if (isHostOrCoHost && shouldSync) {
+            const syncMessage = {
+                type: "video_sync",
+                state: videoState.isPlaying ? "playing" : "paused",
+                time: videoState.currentTime,
+                url: videoState.url,
+                sync_timestamp: Date.now(),
+                is_host: isHost,
+                from_host: isHost,
+                extended_state: {
+                    playlist: newPlaylistState.playlist,
+                    current_index: newPlaylistState.current_index,
+                    loop: newPlaylistState.loop,
+                    shuffle: newPlaylistState.shuffle,
+                }
+            };
+            // Send via WebRTC Data Channel (Low Latency)
+            broadcastData(syncMessage);
+
+            // Also send via WebSocket as fallback/redundancy
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(syncMessage));
+            }
+        }
+    }, [isHostOrCoHost, videoState.isPlaying, videoState.currentTime, videoState.url]);
 
     useEffect(() => {
-        if (status === "unauthenticated") {
+        if (isLeavingRoomRef.current) {
+            console.log("RoomPage useEffect: isLeavingRoomRef is true, preventing initialization.");
+            return; // Prevent further execution if we are intentionally leaving
+        }
+
+        if (isLoaded && !user) {
             router.push("/");
             return;
         }
 
-        const fetchRoomDetails = async () => {
+        const initializeRoom = async () => {
+            // First fetch room details
+            let room;
             try {
-                // Try API first
-                const { api } = await import("@/lib/api");
-                const room = await api.getRoom(roomId);
+                room = await fetchRoomDetails();
+            } catch (error: any) {
+                console.error("Failed to fetch room details:", error);
+                if (error.message?.includes("Room") && error.message?.includes("not found")) {
+                    alert("This room no longer exists or has been deleted.");
+                    router.push("/dashboard");
+                    return;
+                }
+                throw error; // Re-throw other errors
+            }
 
-                const tabs: ActiveTab[] = [];
-                if (room.has_video) tabs.push("video");
-                if (room.has_music) tabs.push("music");
-                if (room.has_games) tabs.push("games");
+            // Then restore session if user is authenticated
+            if (user?.primaryEmailAddress?.emailAddress && room) {
+                try {
+                    const numericRoomId = room.id;
 
-                setAvailableTabs(tabs);
-                if (tabs.length > 0) setActiveTab(tabs[0]);
+                    // Set auth token for session manager
+                    const token = await api.getTokenForEmail(user.primaryEmailAddress.emailAddress, user.fullName);
+                    sessionManager.setAuthToken(token);
 
-                setRoomConfig({
-                    name: room.name,
-                    features: { video: room.has_video, music: room.has_music, games: room.has_games },
-                    createdAt: new Date(room.created_at).getTime(),
-                    hostId: room.host_id.toString(),
-                    type: "custom"
-                });
+                    // Join room and restore session data (validates access)
+                    const sessionData = await sessionManager.joinRoom(numericRoomId);
 
-            } catch (error) {
-                console.error("Failed to fetch room from API", error);
-                // Fallback logic could go here
+                    if (sessionData) {
+                        // Load chat history from the database
+                        try {
+                            // Clear any existing messages first to prevent contamination
+                            setMessages([]);
+
+                            const chatHistory = await sessionManager.getChatHistory(numericRoomId, 50);
+                            if (chatHistory && chatHistory.length > 0) {
+                                const restoredMessages = chatHistory.map(msg => ({
+                                    id: msg.id.toString(),
+                                    user: msg.username,
+                                    text: msg.message,
+                                    timestamp: new Date(msg.timestamp),
+                                    roomId: numericRoomId.toString(), // Add room tracking
+                                })).reverse(); // Reverse to show oldest first
+
+                                setMessages(restoredMessages);
+                                setRestoredData(prev => ({ ...prev, chatMessages: restoredMessages.length }));
+                                console.log(`Restored ${restoredMessages.length} chat messages for room ${numericRoomId}`);
+                            }
+                        } catch (error) {
+                            console.error('Failed to load chat history:', error);
+                        }
+
+                        // Restore video state
+                        const restoredVideoState = sessionManager.restoreVideoState(sessionData.sync_states || []);
+                        if (restoredVideoState) {
+                            setVideoState({
+                                url: restoredVideoState.url,
+                                isPlaying: restoredVideoState.isPlaying,
+                                currentTime: restoredVideoState.currentTime,
+                                timestamp: Date.now(),
+                            });
+                            setVideoPlaylistState(restoredVideoState.playlistState);
+                            setRestoredData(prev => ({ ...prev, videoState: true }));
+                        }
+
+                        // Restore music state
+                        const musicSyncState = sessionData.sync_states?.find(s => s.sync_type === 'music');
+                        if (musicSyncState) {
+                            setMusicState({
+                                track: musicSyncState.extended_state?.track || null,
+                                isPlaying: musicSyncState.is_playing,
+                                currentTime: musicSyncState.current_time,
+                                volume: musicSyncState.volume,
+                                timestamp: Date.now(),
+                            });
+                            setRestoredData(prev => ({ ...prev, musicState: true }));
+                        }
+
+                        // Restore user preferences
+                        if (sessionData.session) {
+                            // Could set preferred volume, notification preferences, etc.
+                            console.log('Session restored:', sessionData.session);
+                            setSessionRestored(true);
+
+                            // Hide restoration notification after 5 seconds
+                            setTimeout(() => setSessionRestored(false), 5000);
+                        }
+                    }
+                } catch (error: any) {
+                    console.error('Failed to restore session:', error);
+
+                    // Handle specific access control errors
+                    if (error.message?.includes("Access denied") || error.message?.includes("403")) {
+                        alert("You cannot access this room. You may have already left it or been removed.");
+                        router.push("/dashboard");
+                        return;
+                    }
+
+                    // Handle room not found
+                    if (error.message?.includes("404") || error.message?.includes("Room not found")) {
+                        alert("This room no longer exists.");
+                        router.push("/dashboard");
+                        return;
+                    }
+
+                    // Continue without session restoration for other errors
+                }
             }
         };
 
-        fetchRoomDetails();
-    }, [roomId, router, status, session]);
+        initializeRoom();
+    }, [isLoaded, router, user, fetchRoomDetails]);
+
+    // Refs for accessing up-to-date state inside WebSocket callbacks without dependency loops
+    const videoStateRef = useRef(videoState);
+    const videoPlaylistStateRef = useRef(videoPlaylistState); // Add ref for playlist state
+    const musicStateRef = useRef(musicState);
+    const paramsRef = useRef(params);
+    const userRef = useRef(user);
+    const roomConfigRef = useRef(roomConfig); // Added to track roomConfig for isHost check
+
+    useEffect(() => {
+        videoStateRef.current = videoState;
+    }, [videoState]);
+
+    useEffect(() => {
+        videoPlaylistStateRef.current = videoPlaylistState; // Update ref for playlist state
+    }, [videoPlaylistState]);
+
+    useEffect(() => {
+        musicStateRef.current = musicState;
+    }, [musicState]);
+
+    useEffect(() => {
+        paramsRef.current = params;
+        userRef.current = user;
+    }, [params, user]);
+
+    useEffect(() => {
+        roomConfigRef.current = roomConfig;
+    }, [roomConfig]);
 
     // WebSocket Logic
     useEffect(() => {
-        if (!session?.user?.name) return;
+        if (!user?.primaryEmailAddress?.emailAddress) return;
 
-        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-        const safeNickname = encodeURIComponent(session.user.name);
-        const ws = new WebSocket(`${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
-        wsRef.current = ws;
+        const connectWebSocket = () => {
+            const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+            const userName = user?.fullName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Guest';
+            const safeNickname = encodeURIComponent(userName);
+            const userImage = encodeURIComponent(user?.imageUrl || "");
 
-        ws.onopen = () => {
-            console.log("Connected to Room WebSocket");
-        };
+            console.log(`Attempting WebSocket connection to: ${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+            const ws = new WebSocket(`${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}`);
+            wsRef.current = ws;
 
-                if (data.type === "chat" || data.type === "system") {
-                    // Deduplication check
-                    setMessages(prev => {
-                        if (data.id && prev.some(m => m.id === data.id)) return prev;
+            ws.onopen = () => {
+                console.log("Connected to Room WebSocket");
+                setIsConnected(true);
 
-                        return [...prev, {
-                            id: data.id || Date.now().toString() + Math.random(),
-                            user: data.type === "system" ? "System" : data.user,
-                            text: data.type === "system" ? data.message : data.text,
-                            timestamp: new Date(data.timestamp || Date.now()),
-                        }];
-                    });
-                } else if (data.type === "users") {
-                    setParticipants(data.users);
-                    setOnlineCount(data.count);
-                } else if (data.type === "video_sync") {
-                    // Only apply if not self (though backend usually broadcasts to all)
-                    // or if we rely on backend as truth.
-                    if (data.user !== session.user?.name) {
-                        setVideoState({
-                            url: data.url,
-                            isPlaying: data.state === "playing",
-                            currentTime: data.time,
-                            timestamp: Date.now() // Force update
+                ws.send(JSON.stringify({
+                    type: "request_video_state",
+                    requesting_user: userName
+                }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === "chat" || data.type === "system") {
+                        // Enhanced deduplication check
+                        setMessages(prev => {
+                            // Check for duplicate by ID
+                            if (data.id && prev.some(m => m.id === data.id)) {
+                                return prev;
+                            }
+
+                            // Check for duplicate by content and timestamp (for messages without ID)
+                            const newMessage = {
+                                id: data.id || `${Date.now()}-${Math.random()}`,
+                                user: data.type === "system" ? "System" : data.username,
+                                imageUrl: data.userImage, // Map userImage from signal
+                                text: data.message,
+                                timestamp: new Date(data.timestamp || Date.now()),
+                                roomId: roomId, // Add current room tracking
+                                isHost: data.isHost // Handle isHost flag if backend sends it
+                            };
+
+                            // Check if similar message exists (same user, text, within 1 second)
+                            const isDuplicate = prev.some(m =>
+                                m.user === newMessage.user &&
+                                m.text === newMessage.text &&
+                                Math.abs(m.timestamp.getTime() - newMessage.timestamp.getTime()) < 1000
+                            );
+
+                            if (isDuplicate) {
+                                return prev;
+                            }
+
+                            return [...prev, newMessage];
                         });
+                    } else if (data.type === "users") {
+                        // Handle array of strings or objects
+                        const usersList = data.users.map((u: any) => {
+                            if (typeof u === 'string') return { name: u };
+                            return {
+                                name: u.name || u.username,
+                                imageUrl: u.imageUrl,
+                                isHost: u.isHost
+                            };
+                        });
+                        setParticipants(usersList);
+                        setOnlineCount(data.count);
+                    } else if (data.type === "mic_status_update") {
+                        // Update mic statuses for all users
+                        setMicStatuses(data.mic_statuses || {});
+                    } else if (data.type === "signal") {
+                        // WebRTC Signaling
+                        // Use ref to ensure we use the latest handleSignal which has the open socket
+                        handleSignalRef.current(data.user, data.signal);
+                    } else if (data.type === "video_sync") {
+                        // Only apply video sync from host to ensure host controls the stream
+                        if (data.from_host) {
+                            setVideoState(prev => ({
+                                url: data.url || prev.url,
+                                isPlaying: data.state === "playing" || data.state === "buffering",
+                                currentTime: data.time || 0,
+                                timestamp: Date.now() // Force update
+                            }));
+                            if (data.extended_state) {
+                                setVideoPlaylistState(data.extended_state);
+                            }
+                        }
+                    } else if (data.type === "music_sync") {
+                        // Only apply music sync from host
+                        if (data.from_host) {
+                            setMusicState(prev => ({
+                                track: data.track || prev.track,
+                                isPlaying: data.state === "playing" || data.state === "buffering",
+                                currentTime: data.time || 0,
+                                volume: data.volume !== undefined ? data.volume : prev.volume,
+                                timestamp: Date.now()
+                            }));
+                        }
+                    } else if (data.type === "request_video_state") {
+                        // Host should respond with current video state when requested
+                        const currentVideoState = videoStateRef.current;
+                        const currentVideoPlaylistState = videoPlaylistStateRef.current; // Get current playlist state
+                        const currentRoomConfig = roomConfigRef.current;
+                        const currentUser = userRef.current;
+                        const isCurrentUserHost = currentRoomConfig?.hostEmail === currentUser?.primaryEmailAddress?.emailAddress;
+
+                        if (isCurrentUserHost && currentVideoState.url) {
+                            wsRef.current?.send(JSON.stringify({
+                                type: "video_state_response",
+                                state: currentVideoState.isPlaying ? "playing" : "paused",
+                                time: currentVideoState.currentTime,
+                                url: currentVideoState.url,
+                                is_host: true, // Backend will verify this
+                                extended_state: currentVideoPlaylistState // Include playlist state
+                            }));
+                        }
+                    } else if (data.type === "chat_cleared") {
+                        setMessages([]);
+                    } else if (data.type === "room_state_update") {
+                        // Handle room state updates to refresh component state
+                        if (data.update_type === "settings_changed" || data.update_type === "host_changed") {
+                            // Refetch room details to update state
+                            fetchRoomDetailsRef.current?.();
+                        }
+                    } else if (data.type === "room_ending") {
+                        // Handle room ending notification - clean up everything
+                        console.log("Room ending:", data.message);
+
+                        // Set flag to prevent reconnection attempts
+                        isLeavingRoomRef.current = true;
+
+                        // Clear messages to prevent cross-room contamination
+                        setMessages([]);
+
+                        // Clean up local streams
+                        if (localStream) {
+                            localStream.getTracks().forEach(track => track.stop());
+                            setLocalStream(null);
+                        }
+
+                        // Close WebSocket connection
+                        if (wsRef.current) {
+                            wsRef.current.close(1000, "Room ended by host");
+                        }
+
+                        // Save current session state if possible (async without await to avoid blocking)
+                        if (userRef.current?.primaryEmailAddress?.emailAddress && roomConfig) {
+                            const currentVideoTime = videoState.currentTime;
+                            const currentMusicTime = musicState.currentTime;
+                            sessionManager.leaveRoom(roomConfig.id, currentVideoTime, currentMusicTime)
+                                .catch(error => console.error('Failed to save session on room end:', error));
+                        }
+
+                        // Show notification and redirect
+                        alert(data.message || "The room has been ended by the host.");
+                        router.push("/dashboard");
+                    } else if (data.type === "cohost_promoted") {
+                        // Handle co-host promotion
+                        if (data.userEmail === userRef.current?.primaryEmailAddress?.emailAddress) {
+                            // Current user was promoted
+                            setMessages(prev => [...prev, {
+                                id: Date.now().toString(),
+                                user: "System",
+                                text: "You have been promoted to co-host!",
+                                timestamp: new Date()
+                            }]);
+                        }
+                        // Update room config
+                        setRoomConfig(prev => prev ? {
+                            ...prev,
+                            coHosts: [...(prev.coHosts || []), data.userEmail]
+                        } : null);
+                    } else if (data.type === "cohost_demoted") {
+                        // Handle co-host demotion
+                        if (data.userEmail === userRef.current?.primaryEmailAddress?.emailAddress) {
+                            // Current user was demoted
+                            setMessages(prev => [...prev, {
+                                id: Date.now().toString(),
+                                user: "System",
+                                text: "You have been demoted from co-host.",
+                                timestamp: new Date()
+                            }]);
+                        }
+                        // Update room config
+                        setRoomConfig(prev => prev ? {
+                            ...prev,
+                            coHosts: (prev.coHosts || []).filter(email => email !== data.userEmail)
+                        } : null);
                     }
+                } catch (e) {
+                    console.warn("WebSocket Parse Error", e);
                 }
-            } catch (e) {
-                console.warn("WebSocket Parse Error", e);
-            }
+            };
+
+            ws.onclose = (event) => {
+                console.log("WebSocket closed", event.code, event.reason);
+                setIsConnected(false);
+                // Only attempt to reconnect if not intentionally leaving the room
+                if (!event.wasClean && !isLeavingRoomRef.current) {
+                    setTimeout(() => {
+                        console.log("Attempting to reconnect...");
+                        connectWebSocket();
+                    }, 3000);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                console.error("WebSocket URL:", `${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
+                console.error("WebSocket readyState:", ws.readyState);
+                setIsConnected(false);
+            };
         };
+
+        connectWebSocket();
 
         return () => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.close();
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.close(1000, "Component unmounting");
             }
         };
-    }, [roomId, session?.user?.name]);
+    }, [roomId, user?.fullName]);
+
+
+    // We need a workaround for the circular dependency.
+    // Let's use a Ref for the broadcast function.
+    const broadcastDataRef = useRef<(data: any) => void>(() => { });
+    // Also use a Ref for handleSignal to avoid stale closures in ws.onmessage
+    const handleSignalRef = useRef<(user: string, signal: any) => void>(() => { });
+
+    // Redefine handlePeerConnected to actually USE the broadcastDataRef
+    const onPeerConnectAction = useCallback((peerId: string) => {
+        const currentRoomConfig = roomConfigRef.current;
+        const currentUser = userRef.current;
+        const currentVideoState = videoStateRef.current;
+        const isCurrentUserHost = currentRoomConfig?.hostEmail === currentUser?.primaryEmailAddress?.emailAddress;
+
+        if (isCurrentUserHost && currentVideoState.url) {
+            console.log(`WebRTC: Sending initial sync to ${peerId}`);
+            const syncMessage = {
+                type: "video_sync",
+                state: currentVideoState.isPlaying ? "playing" : "paused",
+                time: currentVideoState.currentTime,
+                url: currentVideoState.url,
+                sync_timestamp: Date.now(),
+                is_host: true,
+                from_host: true,
+                extended_state: videoPlaylistStateRef.current // Include playlist state
+            };
+            broadcastDataRef.current(syncMessage);
+        }
+    }, []);
+
+    // Initialize WebRTC Mesh
+    const { handleSignal, broadcastData, onData, remoteStreams } = useWebRTCMesh({
+        socket: isConnected ? wsRef.current : null,
+        roomCode: roomId,
+        currentUser: user?.fullName || "Guest",
+        participants: participants.map(p => p.name),
+        localStream,
+        onPeerConnected: onPeerConnectAction
+    });
+
+    // Update refs
+    useEffect(() => {
+        broadcastDataRef.current = broadcastData;
+        handleSignalRef.current = handleSignal;
+    }, [broadcastData, handleSignal]);
+
+    // WebRTC Data Listener
+    useEffect(() => {
+        onData((data) => {
+            // Handle incoming WebRTC data
+            if (data.type === "video_sync") {
+                // console.log("Received WebRTC Sync:", data);
+                if (data.from_host) {
+                    setVideoState(prev => ({
+                        url: data.url || prev.url,
+                        isPlaying: data.state === "playing" || data.state === "buffering",
+                        currentTime: data.time || 0,
+                        timestamp: Date.now()
+                    }));
+                    if (data.extended_state) {
+                        setVideoPlaylistState(data.extended_state);
+                    }
+                }
+            } else if (data.type === "music_sync") {
+                if (data.from_host) {
+                    setMusicState(prev => ({
+                        track: data.track || prev.track,
+                        isPlaying: data.state === "playing" || data.state === "buffering",
+                        currentTime: data.time || 0,
+                        volume: data.volume !== undefined ? data.volume : prev.volume,
+                        timestamp: Date.now()
+                    }));
+                }
+            }
+        });
+    }, [onData]);
+
+    const toggleMic = async () => {
+        if (isMicOn) {
+            // Turn off
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                setLocalStream(null);
+            }
+            setIsMicOn(false);
+
+            // Broadcast mic off status
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: "mic_status",
+                    user: user?.fullName || 'Guest',
+                    isMicOn: false
+                }));
+            }
+        } else {
+            // Turn on
+            try {
+                // Check if getUserMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("getUserMedia is not supported in this browser");
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                setLocalStream(stream);
+                setIsMicOn(true);
+
+                // Broadcast mic on status
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                        type: "mic_status",
+                        user: user?.fullName || 'Guest',
+                        isMicOn: true
+                    }));
+                }
+
+                console.log("Microphone enabled successfully");
+            } catch (err: any) {
+                console.error("Failed to get microphone access:", err);
+
+                // Show user-friendly error based on error type
+                if (err.name === 'NotAllowedError') {
+                    alert("Microphone access denied. Please allow microphone permissions and try again.");
+                } else if (err.name === 'NotFoundError') {
+                    alert("No microphone found. Please check your audio devices.");
+                } else if (err.name === 'NotReadableError') {
+                    alert("Microphone is already in use by another application.");
+                } else {
+                    alert("Failed to access microphone: " + err.message);
+                }
+            }
+        }
+    };
 
     const handleSendMessage = (text: string) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -176,23 +744,66 @@ export default function RoomPage() {
         }
     };
 
-    const handleVideoStateChange = (newState: any) => {
+    const handleVideoStateChange = (newState: Partial<{ url: string; isPlaying: boolean; currentTime: number }>, shouldSync: boolean = true) => {
         // Merge local state immediately for responsiveness
         const updated = { ...videoState, ...newState };
         setVideoState(prev => ({ ...prev, ...newState, timestamp: Date.now() }));
 
-        // Broadcast if connected
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
+        // Only broadcast if shouldSync is true and user is host or co-host
+        if (shouldSync && isHostOrCoHost) {
+            const syncMessage = {
                 type: "video_sync",
                 state: updated.isPlaying ? "playing" : "paused",
                 time: updated.currentTime,
-                url: updated.url
-            }));
+                url: updated.url,
+                sync_timestamp: Date.now(),
+                is_host: isHost,
+                from_host: isHost,
+                extended_state: videoPlaylistStateRef.current // Include playlist state
+            };
+
+            // Send via WebRTC Data Channel (Low Latency)
+            broadcastData(syncMessage);
+
+            // Also send via WebSocket as fallback/redundancy
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(syncMessage));
+            }
         }
     };
 
-    const isHost = roomConfig?.hostId === session?.user?.id;
+    const handleMusicStateChange = (newState: any, shouldSync: boolean = true) => {
+        // Merge local state immediately for responsiveness
+        const updated = { ...musicState, ...newState };
+        setMusicState(prev => ({ ...prev, ...newState, timestamp: Date.now() }));
+
+        // Only broadcast if shouldSync is true and user is host or co-host
+        if (shouldSync && isHostOrCoHost) {
+            const syncMessage = {
+                type: "music_sync",
+                state: updated.isPlaying ? "playing" : "paused",
+                time: updated.currentTime,
+                track: updated.track,
+                volume: updated.volume,
+                sync_timestamp: Date.now(),
+                is_host: isHost,
+                from_host: isHost,
+                extended_state: {
+                    shuffle: false, // Could be extended
+                    repeat: false
+                }
+            };
+
+            // Send via WebRTC Data Channel (Low Latency)
+            broadcastData(syncMessage);
+
+            // Also send via WebSocket as fallback/redundancy
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(syncMessage));
+            }
+        }
+    };
+
 
     const copyRoomCode = async () => {
         await navigator.clipboard.writeText(roomId);
@@ -204,191 +815,197 @@ export default function RoomPage() {
         setShowExitConfirm(true);
     };
 
-    const confirmExit = () => {
+    const handleEndRoomClick = () => {
+        setShowEndRoomConfirm(true);
+    };
+
+    const confirmExit = async () => {
+        isLeavingRoomRef.current = true; // Signal that we are intentionally leaving
+
+        // Clear messages to prevent cross-room contamination
+        setMessages([]);
+
+        // Save session state before leaving
+        if (user?.primaryEmailAddress?.emailAddress && roomConfig) {
+            try {
+                const currentVideoTime = videoState.currentTime;
+                const currentMusicTime = musicState.currentTime;
+                await sessionManager.leaveRoom(roomConfig.id, currentVideoTime, currentMusicTime);
+            } catch (error) {
+                console.error('Failed to save session on exit:', error);
+            }
+        }
+
+        if (wsRef.current) {
+            wsRef.current.close();
+        }
         router.push("/dashboard");
     };
 
-    const handleLogout = async () => {
-        await signOut({ callbackUrl: "/" });
+    const confirmEndRoom = async () => {
+        if (!user?.primaryEmailAddress?.emailAddress || !roomConfig) return;
+
+        try {
+            setShowEndRoomConfirm(false); // Close dialog immediately
+
+            // Save current session state before ending room
+            const currentVideoTime = videoState.currentTime;
+            const currentMusicTime = musicState.currentTime;
+            await sessionManager.leaveRoom(roomConfig.id, currentVideoTime, currentMusicTime);
+
+            // Set flag to prevent reconnection attempts
+            isLeavingRoomRef.current = true;
+
+            // Delete the room via API (this will broadcast to all users)
+            await api.deleteRoom(roomId, user.primaryEmailAddress.emailAddress);
+
+            // Close WebSocket connection
+            if (wsRef.current) {
+                wsRef.current.close(1000, "Room ended by host");
+            }
+
+            // Clean up local streams
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                setLocalStream(null);
+            }
+
+            // Redirect to dashboard
+            router.push("/dashboard");
+        } catch (error) {
+            console.error('Failed to end room:', error);
+            setShowEndRoomConfirm(false);
+            alert('Failed to end room. Please try again.');
+        }
     };
 
-    if (status === "loading" || !session) {
+    const handleLogout = async () => {
+        await signOut({ redirectUrl: "/" });
+    };
+
+    const toggleSidebar = () => {
+        setIsSidebarOpen(!isSidebarOpen);
+    };
+
+    const promoteToCoHost = (userEmail: string) => {
+        if (!isHost || !roomConfig) return;
+
+        const updatedCoHosts = [...(roomConfig.coHosts || []), userEmail];
+        setRoomConfig(prev => prev ? { ...prev, coHosts: updatedCoHosts } : null);
+
+        // Broadcast co-host promotion
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "cohost_promoted",
+                userEmail,
+                promotedBy: user?.primaryEmailAddress?.emailAddress,
+                timestamp: Date.now()
+            }));
+        }
+    };
+
+    const demoteCoHost = (userEmail: string) => {
+        if (!isHost || !roomConfig) return;
+
+        const updatedCoHosts = (roomConfig.coHosts || []).filter(email => email !== userEmail);
+        setRoomConfig(prev => prev ? { ...prev, coHosts: updatedCoHosts } : null);
+
+        // Broadcast co-host demotion
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "cohost_demoted",
+                userEmail,
+                demotedBy: user?.primaryEmailAddress?.emailAddress,
+                timestamp: Date.now()
+            }));
+        }
+    };
+
+    // Clean up on unmount to prevent cross-room contamination
+    useEffect(() => {
+        return () => {
+            setMessages([]);
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, []);
+
+    if (!isLoaded || !user) {
         return <div className={styles.room}>Loading...</div>;
     }
 
     return (
         <div className={styles.room}>
-            {/* Header */}
-            {/* Header */}
-            <header className={styles.header}>
-                <div className={styles.headerLeft}>
-                    <Button variant="ghost" size="sm" onClick={handleExitClick}>
-                        <ArrowLeft size={18} />
-                    </Button>
-                    <MonitorPlay size={24} className="text-pink-500" />
-                    <div className={styles.roomInfo}>
-                        <h1 className={styles.roomName}>{roomConfig?.name || `Room ${roomId}`}</h1>
-                        {isHost && (
-                            <span className={styles.hostBadge}>
-                                <Crown size={12} /> HOST
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                <div className={styles.headerRight}>
-                    <div className={styles.onlineIndicator}>
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span>{onlineCount} Online</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={copyRoomCode}>
-                        {copied ? <Check size={16} className={styles.successIcon} /> : <Copy size={16} />}
-                        <span className="ml-2">{roomId}</span>
-                    </Button>
-
-                    {/* User Menu */}
-                    <div className={styles.userMenu}>
-                        <div
-                            className={styles.avatar}
-                            onClick={() => setShowUserMenu(!showUserMenu)}
-                        >
-                            {(session?.user?.name?.[0] || "U").toUpperCase()}
+            {/* Session Restoration Notification */}
+            {sessionRestored && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg">
+                    <div className="flex items-center gap-2">
+                        <span>✅ Session Restored!</span>
+                        <div className="text-sm opacity-90">
+                            {restoredData.chatMessages > 0 && `${restoredData.chatMessages} messages • `}
+                            {restoredData.videoState && "Video state • "}
+                            {restoredData.musicState && "Music state • "}
+                            Welcome back!
                         </div>
-
-                        {showUserMenu && (
-                            <div className={styles.dropdownMenu}>
-                                <div className={styles.menuHeader}>
-                                    <span className={styles.menuUserName}>{session?.user?.name}</span>
-                                    <span className={styles.menuUserEmail}>{session?.user?.email}</span>
-                                </div>
-                                <button className={styles.menuItem}>
-                                    <User size={16} /> Profile
-                                </button>
-                                <button className={styles.menuItem}>
-                                    <Settings size={16} /> Settings
-                                </button>
-                                <button className={`${styles.menuItem} ${styles.danger}`} onClick={handleLogout}>
-                                    <LogOut size={16} /> Sign Out
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
-            </header>
+            )}
+
+            {/* Header */}
+            <RoomHeader
+                onExitClick={handleExitClick}
+                onEndRoomClick={handleEndRoomClick}
+                roomConfig={roomConfig}
+                roomId={roomId}
+                isHost={isHost}
+                isConnected={isConnected}
+                onlineCount={onlineCount}
+                onCopyRoomCode={copyRoomCode}
+                wasCopied={copied}
+                showUserMenu={showUserMenu}
+                onToggleUserMenu={() => setShowUserMenu(!showUserMenu)}
+            />
+
+
 
             {/* Main Content */}
             <div className={styles.mainContent}>
-                <div className={styles.contentArea}>
-                    {/* Tab Navigation */}
-                    <div className={styles.tabNav}>
-                        {availableTabs.includes("video") && (
-                            <button
-                                className={`${styles.tabButton} ${activeTab === "video" ? styles.active : ""}`}
-                                onClick={() => setActiveTab("video")}
-                            >
-                                <Play size={18} />
-                                <span>Watch</span>
-                            </button>
-                        )}
-                        {availableTabs.includes("music") && (
-                            <button
-                                className={`${styles.tabButton} ${activeTab === "music" ? styles.active : ""}`}
-                                onClick={() => setActiveTab("music")}
-                            >
-                                <Music size={18} />
-                                <span>Listen</span>
-                            </button>
-                        )}
-                        {availableTabs.includes("games") && (
-                            <button
-                                className={`${styles.tabButton} ${activeTab === "games" ? styles.active : ""}`}
-                                onClick={() => setActiveTab("games")}
-                            >
-                                <Gamepad2 size={18} />
-                                <span>Play</span>
-                            </button>
-                        )}
-
-
-                        {/* Settings Button */}
-                        <div className={styles.settingsTab}>
-                            <button
-                                className={styles.tabButton}
-                                onClick={() => setShowSettingsDialog(true)}
-                            >
-                                <Settings size={18} />
-                                <span>Settings</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Tab Content */}
-                    <div className={styles.tabContent}>
-                        {activeTab === "video" && (
-                            <VideoPlayer
-                                isHost={isHost}
-                                videoState={videoState}
-                                onStateChange={handleVideoStateChange}
-                            />
-                        )}
-                        {activeTab === "music" && (
-                            <div className={styles.comingSoon}>
-                                <div className={styles.comingSoonContent}>
-                                    <div className={styles.featureIcon}>
-                                        <Music size={48} />
-                                    </div>
-                                    <h2 className={styles.comingSoonTitle}>Music Player Coming Soon</h2>
-                                    <p className={styles.comingSoonDescription}>
-                                        Listen to music together in perfect sync! Coming features:
-                                    </p>
-                                    <ul className={styles.featureList}>
-                                        <li>Synchronized music playback</li>
-                                        <li>Spotify and YouTube Music integration</li>
-                                        <li>Collaborative playlists</li>
-                                        <li>Real-time music recommendations</li>
-                                        <li>Audio quality controls</li>
-                                    </ul>
-                                    <div className={styles.comingSoonBadge}>
-                                        🎵 Stay tuned for updates!
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {activeTab === "games" && (
-                            <div className={styles.comingSoon}>
-                                <div className={styles.comingSoonContent}>
-                                    <div className={styles.featureIcon}>
-                                        <Gamepad2 size={48} />
-                                    </div>
-                                    <h2 className={styles.comingSoonTitle}>Games Area Coming Soon</h2>
-                                    <p className={styles.comingSoonDescription}>
-                                        Play games together with friends! Planned features:
-                                    </p>
-                                    <ul className={styles.featureList}>
-                                        <li>Multiplayer party games</li>
-                                        <li>Trivia and quiz games</li>
-                                        <li>Drawing and guessing games</li>
-                                        <li>Real-time leaderboards</li>
-                                        <li>Custom game rooms</li>
-                                    </ul>
-                                    <div className={styles.comingSoonBadge}>
-                                        🎮 Game on soon!
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <RoomMainContent
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    availableTabs={availableTabs}
+                    isHost={isHost}
+                    videoState={videoState}
+                    onVideoStateChange={handleVideoStateChange}
+                    videoPlaylistState={videoPlaylistState}
+                    onVideoPlaylistChange={handleVideoPlaylistChange}
+                    onPlaylistToggle={setIsPlaylistOpen}
+                    musicState={musicState}
+                    onMusicStateChange={handleMusicStateChange}
+                />
 
                 {/* Chat Sidebar */}
                 <ChatSidebar
                     roomCode={roomId}
-                    nickname={session.user?.name || "Guest"}
+                    nickname={user?.fullName || "Guest"}
                     isHost={isHost}
+                    hostEmail={roomConfig?.hostEmail}
                     setOnlineCount={setOnlineCount}
                     messages={messages}
                     onSendMessage={handleSendMessage}
                     participants={participants}
+                    activeStreams={remoteStreams}
+                    micStatuses={micStatuses}
+                    isMicOn={isMicOn}
+                    onToggleMic={toggleMic}
+                    onOpenSettings={() => setShowSettingsDialog(true)}
+                    isOpen={isSidebarOpen}
+                    onToggleSidebar={toggleSidebar}
+                    coHosts={roomConfig?.coHosts}
+                    onPromoteToCoHost={promoteToCoHost}
+                    onDemoteCoHost={demoteCoHost}
+                    isShrunken={isPlaylistOpen}
                 />
             </div>
 
@@ -397,13 +1014,13 @@ export default function RoomPage() {
                     <DialogHeader>
                         <DialogTitle>Leave Room?</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to leave this room?
+                            Are you sure you want to leave this room? This will only end your session.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-2">
                         <p className="text-slate-400 text-sm">
                             <AlertTriangle size={16} className="inline mr-2 text-amber-500" />
-                            The music and video will ensure to stop playing for you.
+                            Only your session will end. The room and other participants will continue.
                         </p>
                     </div>
                     <DialogFooter>
@@ -417,16 +1034,66 @@ export default function RoomPage() {
                 </DialogContent>
             </Dialog>
 
-        { roomConfig && (
-            <RoomSettingsDialog
-                open={showSettingsDialog}
-                onOpenChange={setShowSettingsDialog}
-                roomName={roomConfig.name}
-                features={roomConfig.features}
-                isHost={isHost}
-            />
-        )
-}
+            <Dialog open={showEndRoomConfirm} onOpenChange={setShowEndRoomConfirm}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>End Room?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to end this room permanently? This will disconnect all participants.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <p className="text-slate-400 text-sm">
+                            <AlertTriangle size={16} className="inline mr-2 text-red-500" />
+                            This action cannot be undone. All participants will be disconnected and the room will be deleted.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setShowEndRoomConfirm(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={confirmEndRoom} className="bg-red-600 hover:bg-red-700 text-white">
+                            End Room
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {roomConfig && (
+                <RoomSettingsDialog
+                    open={showSettingsDialog}
+                    onOpenChange={setShowSettingsDialog}
+                    roomName={roomConfig.name}
+                    features={roomConfig.features}
+                    isHost={isHost}
+                    onChatCleared={() => setMessages([])}
+                />
+            )
+            }
+
+            {/* Hidden Audio Elements for Voice Chat */}
+            {remoteStreams.map(rs => (
+                <RemoteAudio key={rs.peerId} stream={rs.stream} peerId={rs.peerId} />
+            ))}
         </div >
     );
 }
+
+
+const RemoteAudio = ({ stream, peerId }: { stream: MediaStream, peerId: string }) => {
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.srcObject = stream;
+            audioRef.current.play().catch((err: any) => {
+                // Ignore AbortError which is common when streams change quickly or component unmounts
+                if (err.name !== 'AbortError') {
+                    console.warn(`Audio playback failed for peer ${peerId}`, err);
+                }
+            });
+        }
+    }, [stream, peerId]);
+
+    return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
+};

@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Image from "next/image";
-import { Play, Music, Gamepad2, Users, ArrowRight, Sparkles, LogOut } from "lucide-react";
+import { Play, Music, Gamepad2, Users, ArrowRight, Sparkles, LogOut, Settings, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import CreateRoomDialog from "@/components/room/CreateRoomDialog";
 import JoinRoomDialog from "@/components/room/JoinRoomDialog";
+import { api } from "@/lib/api";
+import { sessionManager } from "@/lib/sessionManager";
+import UserMenu from "@/components/ui/UserMenu"; // New import
 import styles from "./page.module.css";
 
 interface FeatureCardProps {
@@ -32,17 +35,51 @@ const FeatureCard = ({ icon, title, description, color }: FeatureCardProps) => {
 };
 
 export default function DashboardPage() {
-    const { data: session, status } = useSession();
+    const { user, isLoaded } = useUser();
+    const { signOut } = useClerk();
     const router = useRouter();
     const [roomCode, setRoomCode] = useState("");
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [joinDialogOpen, setJoinDialogOpen] = useState(false);
 
     useEffect(() => {
-        if (status === "unauthenticated") {
+        if (isLoaded && !user) {
             router.push("/");
         }
-    }, [status, router]);
+    }, [isLoaded, user, router]);
+
+    useEffect(() => {
+        if (isLoaded && user && user.primaryEmailAddress?.emailAddress) {
+            const email = user.primaryEmailAddress.emailAddress;
+            const checkActiveSession = async () => {
+                try {
+                    // First get auth token for sessionManager
+                    const token = await api.getTokenForEmail(email);
+                    sessionManager.setAuthToken(token);
+
+                    // Check if user has any active sessions
+                    const activeSessions = await sessionManager.getUserSessions(true);
+
+                    // Only redirect if user has an active session (is currently in a room)
+                    if (activeSessions && activeSessions.length > 0) {
+                        // Get the room for the active session
+                        const hostedRooms = await api.getHostedRooms(email);
+                        const activeRoom = hostedRooms.find(room =>
+                            activeSessions.some(session => session.room_id === room.id)
+                        );
+
+                        if (activeRoom) {
+                            console.log("Redirecting to active room:", activeRoom.code);
+                            router.push(`/room/${activeRoom.code}`);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Failed to check for active sessions", error);
+                }
+            };
+            checkActiveSession();
+        }
+    }, [isLoaded, user, router]);
 
     const handleJoinWithCode = () => {
         if (roomCode.trim()) {
@@ -50,11 +87,12 @@ export default function DashboardPage() {
         }
     };
 
+
     const handleSignOut = async () => {
-        await signOut({ callbackUrl: "/" });
+        await signOut({ redirectUrl: "/" });
     };
 
-    if (status === "loading" || !session) {
+    if (!isLoaded || !user) {
         return (
             <div className={styles.dashboard}>
                 <div className={styles.loadingContainer}>
@@ -68,10 +106,11 @@ export default function DashboardPage() {
     return (
         <div className={styles.dashboard}>
             {/* Background Effects */}
+            {/* Background Effects */}
             <div className={styles.backgroundEffects}>
-                <div className={styles.blob1} />
-                <div className={styles.blob2} />
-                <div className={styles.blob3} />
+                <div className={`${styles.blob} ${styles.type1}`} />
+                <div className={`${styles.blob} ${styles.type2}`} />
+                <div className={`${styles.blob} ${styles.type3}`} />
             </div>
 
             {/* Grid Pattern */}
@@ -84,35 +123,14 @@ export default function DashboardPage() {
                         {/* <Play size={20} /> */}
                         <img src="/logo.png" alt="SharePlay Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     </div>
-                    <span className={styles.logoText}>SharePlay</span>
+
                 </div>
 
-                <div className={styles.userSection}>
-                    {session.user?.image && (
-                        <Image
-                            src={session.user.image}
-                            alt={session.user.name || "User"}
-                            width={36}
-                            height={36}
-                            className={styles.avatar}
-                            unoptimized
-                        />
-                    )}
-                    <span className={styles.userName}>{session.user?.name}</span>
-                    <button className={styles.signOutButton} onClick={handleSignOut}>
-                        <LogOut size={18} />
-                    </button>
-                </div>
+                <UserMenu />
             </header>
 
             {/* Hero Section */}
             <section className={styles.hero}>
-                {/* Badge */}
-                <div className={styles.badge}>
-                    <Sparkles size={14} />
-                    <span>Experience entertainment together</span>
-                </div>
-
                 {/* Main Heading */}
                 <h1 className={styles.heroTitle}>
                     <span className={styles.gradientText}>SharePlay</span>
@@ -139,10 +157,11 @@ export default function DashboardPage() {
                             className={styles.codeInput}
                             maxLength={6}
                         />
-                        <Button variant="glass" size="lg" onClick={handleJoinWithCode}>
-                            Join
-                        </Button>
+
                     </div>
+                    <Button variant="darkHero" size="xl" onClick={handleJoinWithCode}>
+                        Join
+                    </Button>
                 </div>
 
                 {/* Dialogs */}
@@ -177,12 +196,13 @@ export default function DashboardPage() {
             </section>
 
             {/* Floating Elements */}
-            <div className={`${styles.floatingElement} ${styles.floatTopRight}`}>
-                <Users size={24} />
-            </div>
-            <div className={`${styles.floatingElement} ${styles.floatBottomLeft}`}>
-                <Music size={24} />
-            </div>
+            <div className={`${styles.floatingElement} ${styles.type1}`} />
+            <div className={`${styles.floatingElement} ${styles.type2}`} />
+            <div className={`${styles.floatingElement} ${styles.type3}`} />
+
+            <footer className={styles.footer}>
+                <p>&copy; {new Date().getFullYear()} SharePlay. All rights reserved.</p>
+            </footer>
         </div >
     );
 }

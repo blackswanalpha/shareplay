@@ -9,17 +9,24 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.2",
+    "@fontsource/be-vietnam-pro": "^5.2.8",
     "emoji-picker-react": "^4.16.1",
+    "framer-motion": "^12.23.26",
+    "gsap": "^3.14.2",
     "lucide-react": "^0.561.0",
     "next": "16.0.10",
     "next-auth": "^5.0.0-beta.30",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "react-virtuoso": "^4.17.0",
+    "simple-peer": "^9.11.1"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/simple-peer": "^9.11.9",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",

@@ -1,10 +1,11 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
+import { useUser, SignInButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react"; // Added useRef
 import Link from "next/link";
 import styles from "./page.module.css";
+import { gsap } from "gsap"; // Added gsap import
 console.log("Lucid.jpg"); // Force usage to ensure it is not tree-shaken if imported (though using public path)
 
 // Google Icon SVG Component
@@ -66,12 +67,13 @@ const DemoIcon = () => (
 );
 
 export default function OnboardingPage() {
-  const { data: session, status } = useSession();
+  const { user, isLoaded } = useUser();
   const router = useRouter();
   const [showDemoInput, setShowDemoInput] = useState(false);
   const [demoEmail, setDemoEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const welcomeCardRef = useRef(null); // Added useRef
 
   useEffect(() => {
     // Play sound on mount
@@ -79,28 +81,22 @@ export default function OnboardingPage() {
     audio.volume = 0.5;
     audio.play().catch(e => console.log("Audio autoplay blocked:", e));
 
-    if (session) {
+    if (isLoaded && user) {
       router.push("/dashboard");
     }
-  }, [session, router]);
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    await signIn("google", { callbackUrl: "/dashboard" });
-  };
-
-  const handleDemoLogin = async () => {
-    setIsLoading(true);
-    await signIn("credentials", {
-      email: demoEmail,
-      password: password,
-      callbackUrl: "/dashboard",
-      redirect: true,
-    });
-  };
+    // GSAP Animation for welcomeCard
+    if (welcomeCardRef.current) {
+      gsap.fromTo(
+        welcomeCardRef.current,
+        { autoAlpha: 0, y: 50 }, // from opacity 0, y 50px
+        { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", delay: 0.5 } // to opacity 1, y 0px
+      );
+    }
+  }, [user, isLoaded, router]);
 
   // Show loading state
-  if (status === "loading") {
+  if (!isLoaded) {
     return (
       <div className={styles.onboarding}>
         <div className={styles.videoOverlay} />
@@ -131,7 +127,7 @@ export default function OnboardingPage() {
       <div className={styles.videoOverlay} />
 
       {/* Welcome Card */}
-      <div className={styles.welcomeCard}>
+      <div ref={welcomeCardRef} className={styles.welcomeCard}>
         {/* Logo */}
         <div className={styles.logoContainer}>
           <div className={styles.logoIcon}>
@@ -150,58 +146,16 @@ export default function OnboardingPage() {
         </p>
 
         {/* Google Login Button */}
-        <button
-          className="btn btn-google"
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-        >
-          <GoogleIcon />
-          Continue with Google
-        </button>
+        <SignInButton mode="modal">
+          <button
+            className={styles.googleButtonWhiteTheme}
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
+        </SignInButton>
 
-        {/* Login Section */}
-        <div className={styles.demoSection}>
-          <div className={styles.divider}>
-            <span className={styles.dividerLine}></span>
-            <span className={styles.dividerText}>or login with email</span>
-            <span className={styles.dividerLine}></span>
-          </div>
 
-          {!showDemoInput ? (
-            <button
-              className={styles.demoButton}
-              onClick={() => setShowDemoInput(true)}
-            >
-              <DemoIcon />
-              Login
-            </button>
-          ) : (
-            <div className={styles.demoInputContainer}>
-              <input
-                type="email"
-                value={demoEmail}
-                onChange={(e) => setDemoEmail(e.target.value)}
-                placeholder="Email"
-                className={styles.demoInput}
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className={styles.demoInput}
-                style={{ marginTop: '10px' }}
-              />
-              <button
-                className={styles.demoSubmitButton}
-                onClick={handleDemoLogin}
-                disabled={isLoading || !demoEmail || !password}
-              >
-                {isLoading ? <Spinner /> : "Login"}
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Footer Links */}
         <div className={styles.footerLinks}>

@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface Room {
     id: number;
@@ -9,7 +9,10 @@ export interface Room {
     has_games: boolean;
     is_public: boolean;
     host_id: number;
+    host_email?: string;
     created_at: string;
+    co_hosts?: string[];
+    current_video_url?: string;
 }
 
 export interface CreateRoomData {
@@ -20,37 +23,80 @@ export interface CreateRoomData {
     is_public: boolean;
 }
 
-// Helper to get access token (simulated for demo, in real app integrate with NextAuth session)
-// For now, we will rely on keyless creation or assume the backend allows it for simplicity,
-// BUT our backend requires auth for creation.
-// We will implement a temporary login to get a token for the "Demo User" transparently.
-
-let accessToken: string | null = null;
-
-async function getAccessToken() {
-    if (accessToken) return accessToken;
+// Helper to get access token using the user's session email
+async function getAccessToken(userEmail: string, fullName?: string | null) {
     try {
-        const res = await fetch(`${API_URL}/auth/token`, {
+        // Try to authenticate with the session user's email first
+        let res = await fetch(`${API_URL}/auth/token`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
-                username: "user1@shareplay.com", // Hardcoded for demo integration
-                password: "user123",
+                username: userEmail,
+                password: "user123", // In a real app, this would be handled differently
             }),
         });
+
+        // If auth fails (likely user doesn't exist), try to register them
+        if (res.status === 401) {
+            console.log(`Auth failed for ${userEmail}, attempting registration...`);
+            const registerRes = await fetch(`${API_URL}/users/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: userEmail,
+                    password: "user123",
+                    full_name: fullName || userEmail.split('@')[0]
+                })
+            });
+
+            if (registerRes.ok) {
+                console.log(`Registered user ${userEmail}, retrying auth...`);
+                // Retry auth after successful registration
+                res = await fetch(`${API_URL}/auth/token`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({
+                        username: userEmail,
+                        password: "user123",
+                    }),
+                });
+            } else {
+                console.warn(`Registration failed for ${userEmail}`);
+            }
+        }
+
+        // If that fails, fall back to a default user (legacy behavior)
+        if (!res.ok) {
+            console.log(`Auth failed for ${userEmail}, trying fallback user`);
+            res = await fetch(`${API_URL}/auth/token`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    username: "user1@shareplay.com", // Fallback to known user
+                    password: "user123",
+                }),
+            });
+        }
+
         if (!res.ok) throw new Error("Failed to authenticate");
         const data = await res.json();
-        accessToken = data.access_token;
-        return accessToken;
+        return data.access_token;
     } catch (error) {
         console.error("Auth error", error);
-        return null;
+        throw error;
     }
 }
 
 export const api = {
-    async createRoom(data: CreateRoomData): Promise<Room> {
-        const token = await getAccessToken();
+    async trackRoomJoin(roomId: string, data: { user_email: string; requesting_user: string }): Promise<void> {
+        // Implementation stub or actual call
+        console.log(`Tracking join for room ${roomId}:`, data);
+        // If there's an endpoint, fetch it. For now, resolved void.
+        return Promise.resolve();
+    },
+
+    async createRoom(data: CreateRoomData, userEmail: string, fullName?: string | null): Promise<Room> {
+        const token = await getAccessToken(userEmail, fullName);
         const res = await fetch(`${API_URL}/rooms/`, {
             method: "POST",
             headers: {
@@ -69,8 +115,92 @@ export const api = {
     async getRoom(code: string): Promise<Room> {
         const res = await fetch(`${API_URL}/rooms/${code}`);
         if (!res.ok) {
-            throw new Error("Room not found");
+            const errorText = await res.text().catch(() => 'Unknown error');
+            console.error(`Room ${code} not found. Status: ${res.status}, Response: ${errorText}`);
+            throw new Error(`Room ${code} not found (${res.status})`);
+        }
+        return res.json();
+    },
+
+    async getHostedRooms(userEmail: string): Promise<Room[]> {
+        const token = await getAccessToken(userEmail);
+        const res = await fetch(`${API_URL}/users/me/rooms`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error("Failed to fetch hosted rooms");
+        }
+        return res.json();
+    },
+
+    async getUserProfile(): Promise<User> {
+        // We need the token here. In a real app we'd get it from session or storage.
+        // For this demo, we'll rely on the fact that we can get a token for the current user 
+        // if we have their email. Ideally, the session has the accessToken.
+        // Since getAccessToken requires email, we'll assume the caller passes it 
+        // OR we use the fallback in this demo environment.
+        // Actually, let's fetch 'me' using the token.
+
+        // Retrieve token from localStorage if we were storing it, 
+        // but here we are using NextAuth session. 
+        // We'll trust the component to pass the token or we handle it here if we had access to session.
+        // LIMITATION: This helper doesn't have access to the NextAuth session directly.
+        // We will accept a token or email to get token. 
+        // Let's modify this to accept a token.
+        throw new Error("Use getUserProfileWithToken instead");
+    },
+
+    async getUserProfileWithToken(token: string): Promise<User> {
+        const res = await fetch(`${API_URL}/users/me`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+        if (!res.ok) throw new Error("Failed to fetch profile");
+        return res.json();
+    },
+
+    async updateUserProfile(token: string, data: Partial<User>): Promise<User> {
+        const res = await fetch(`${API_URL}/users/me`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error("Failed to update profile");
+        return res.json();
+    },
+
+    // Helper to exchange email for token (for demo purposes when we don't have the token in session explicitly)
+    async getTokenForEmail(email: string, fullName?: string | null): Promise<string> {
+        return getAccessToken(email, fullName);
+    },
+
+    async deleteRoom(roomId: string, userEmail: string): Promise<{ message: string }> {
+        const token = await getAccessToken(userEmail);
+        const res = await fetch(`${API_URL}/rooms/${roomId}`, {
+            method: "DELETE",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error("Failed to delete room");
         }
         return res.json();
     }
 };
+
+export interface User {
+    id: number;
+    email: string;
+    full_name?: string;
+    is_active: boolean;
+    is_superuser: boolean;
+}

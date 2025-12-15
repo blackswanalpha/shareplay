@@ -1,0 +1,171 @@
+
+.notFoundContainer {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0d1117; /* Dark background */
+  color: #e6edf3; /* Light text color */
+}
+
+/* Cosmic background animation */
+.cosmicBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+  overflow: hidden;
+  z-index: 0;
+}
+
+.stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  animation: animateStars 100s linear infinite;
+  background: transparent url('/stars.png') repeat top center; /* Assuming a stars.png or similar */
+}
+
+@keyframes animateStars {
+  from { background-position: 0 0; }
+  to { background-position: -10000px -10000px; }
+}
+
+.notFoundContent {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 40px;
+  background: rgba(13, 17, 23, 0.7); /* Semi-transparent dark background for card */
+  border: 1px solid rgba(60, 60, 60, 0.5);
+  border-radius: 15px;
+  box-shadow: 0 5px 30px rgba(0, 0, 0, 0.5);
+  max-width: 600px;
+  width: 90%;
+}
+
+.errorCode {
+  font-size: 8rem;
+  font-weight: 900;
+  letter-spacing: -5px;
+  line-height: 1;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #FF6B6B, #FFD166, #8DCCAD); /* Vibrant gradient */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+  display: flex;
+  justify-content: center;
+  gap: 10px; /* Space between numbers */
+}
+
+.errorCode span {
+  display: inline-block; /* Allow individual animation */
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+  color: #e6edf3;
+}
+
+.message {
+  font-size: 1.1rem;
+  color: #b0b0b0;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.buttonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 30px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 50px; /* Pill shape */
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  color: #0d1117; /* Dark text for light button */
+  background: linear-gradient(135deg, #8DCCAD, #FFD166); /* Engaging gradient */
+  box-shadow: 0 5px 20px rgba(141, 204, 173, 0.4);
+}
+
+.primaryButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(141, 204, 173, 0.6);
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 25px;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 50px;
+  border: 1px solid rgba(176, 176, 176, 0.3);
+  background-color: transparent;
+  color: #b0b0b0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.secondaryButton:hover {
+  background-color: rgba(176, 176, 176, 0.1);
+  color: #e6edf3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .errorCode {
+    font-size: 6rem;
+    gap: 5px;
+  }
+  .title {
+    font-size: 2rem;
+  }
+  .message {
+    font-size: 1rem;
+  }
+  .primaryButton, .secondaryButton {
+    font-size: 1rem;
+    padding: 12px 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .errorCode {
+    font-size: 4rem;
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .message {
+    font-size: 0.9rem;
+  }
+  .notFoundContent {
+    padding: 25px;
+  }
+}

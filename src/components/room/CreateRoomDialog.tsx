@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { Play, Music, Gamepad2, Copy, Check, Globe, Lock } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +17,7 @@ interface CreateRoomDialogProps {
 
 export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) {
     const router = useRouter();
+    const { user } = useUser();
     const [roomName, setRoomName] = useState("");
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>(["video"]);
     const [isPublic, setIsPublic] = useState(true);
@@ -38,6 +40,10 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
             alert("Please select at least one feature.");
             return;
         }
+        if (!user?.primaryEmailAddress?.emailAddress) {
+            alert("Please log in to create a room.");
+            return;
+        }
 
         setIsCreating(true);
 
@@ -49,7 +55,7 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
                 has_music: selectedFeatures.includes("music"),
                 has_games: selectedFeatures.includes("games"),
                 is_public: isPublic,
-            });
+            }, user.primaryEmailAddress.emailAddress, user.fullName);
 
             setCreatedRoom({ code: newRoom.code, name: newRoom.name });
 

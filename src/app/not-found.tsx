@@ -1,70 +1,94 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import styles from "./page.module.css"; // Reuse existing styles for consistency
-import { Home } from "lucide-react";
+import { useEffect, useRef } from "react"; // Added useRef
+import styles from "./not-found.module.css"; // Using new CSS module
+import { Home, Compass, Bug } from "lucide-react"; // Added new icons
+import { gsap } from "gsap"; // Added gsap import
 
 export default function NotFound() {
-    const [mounted, setMounted] = useState(false);
+  const errorRef = useRef<Array<HTMLSpanElement | null>>([]); // Initialized with correct type
+  const titleRef = useRef(null);
+  const messageRef = useRef(null);
+  const buttonGroupRef = useRef<HTMLDivElement>(null); // Explicitly typed useRef
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+  useEffect(() => {
+    // GSAP Animation for 404 page elements
+    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
-    if (!mounted) return null;
+    tl.fromTo(
+      errorRef.current,
+      { opacity: 0, y: 50 },
+      { opacity: 1, y: 0, duration: 0.8, stagger: 0.1 }
+    )
+      .fromTo(
+        titleRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.6 },
+        "-=0.4"
+      )
+      .fromTo(
+        messageRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.6 },
+        "-=0.4"
+      );
 
-    return (
-        <div className={styles.onboarding}>
-            {/* Background Reuse */}
-            <div className={styles.videoOverlay} style={{ background: 'rgba(0,0,0,0.6)' }} />
+    if (buttonGroupRef.current) { // Added null check
+      const children = Array.from(buttonGroupRef.current.children) as HTMLElement[]; // Type assertion
+      tl.fromTo(
+        children, // Animate children (buttons)
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1 },
+        "-=0.3"
+      );
+    }
+  }, []);
 
-            <div className={styles.welcomeCard} style={{ maxWidth: '400px', animation: 'fadeInUp 0.8s ease-out forwards' }}>
+  return (
+    <div className={styles.notFoundContainer}>
+      <div className={styles.cosmicBackground}>
+        <div className={styles.stars}></div>
+      </div>
 
-                {/* Animated 404 Text */}
-                <h1 style={{
-                    fontSize: '6rem',
-                    fontWeight: '900',
-                    lineHeight: '1',
-                    background: 'linear-gradient(135deg, #8b5cf6, #06b6d4, #ec4899)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    marginBottom: '1rem',
-                    opacity: 0,
-                    animation: 'fadeInUp 0.8s ease-out 0.2s forwards'
-                }}>
-                    404
-                </h1>
+      <div className={styles.notFoundContent}>
+        {/* Animated 404 Text */}
+        <h1 className={styles.errorCode}>
+          {"404".split("").map((char, index) => (
+            <span key={index} ref={(el: HTMLSpanElement | null) => {
+              if (el) {
+                errorRef.current[index] = el;
+              }
+            }}>
+              {char}
+            </span>
+          ))}
+        </h1>
 
-                <h2 className={styles.welcomeTitle} style={{
-                    opacity: 0,
-                    animation: 'fadeInUp 0.8s ease-out 0.4s forwards'
-                }}>
-                    Page Not Found
-                </h2>
+        <h2 className={styles.title} ref={titleRef}>
+          Lost in the Digital Cosmos
+        </h2>
 
-                <p className={styles.welcomeSubtitle} style={{
-                    marginBottom: '32px',
-                    opacity: 0,
-                    animation: 'fadeInUp 0.8s ease-out 0.6s forwards'
-                }}>
-                    Oops! The page you're looking for doesn't exist or has been moved.
-                </p>
+        <p className={styles.message} ref={messageRef}>
+          It seems you&#39;ve ventured into uncharted territory. The page you&#39;re looking for has
+          either moved to another galaxy or never existed.
+        </p>
 
-                <div style={{ opacity: 0, animation: 'fadeInUp 0.8s ease-out 0.8s forwards' }}>
-                    <Link href="/" className={styles.demoSubmitButton} style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        textDecoration: 'none',
-                        width: '100%',
-                        justifyContent: 'center'
-                    }}>
-                        <Home size={20} />
-                        Return Home
-                    </Link>
-                </div>
-            </div>
+        <div className={styles.buttonGroup} ref={buttonGroupRef}>
+          <Link href="/" className={styles.primaryButton}>
+            <Home size={20} />
+            Return to Civilization
+          </Link>
+          <Link href="/dashboard" className={styles.secondaryButton}>
+            <Compass size={20} />
+            Explore SharePlay
+          </Link>
+          <a href="mailto:support@shareplay.com" className={styles.secondaryButton}>
+            <Bug size={20} />
+            Report an Anomaly
+          </a>
         </div>
-    );
+      </div>
+    </div>
+  );
 }
