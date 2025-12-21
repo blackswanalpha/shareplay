@@ -353,37 +353,37 @@ export default function RoomPage() {
     const paramsRef = useRef(params);
     const userRef = useRef(user);
     const roomConfigRef = useRef(roomConfig); // Added to track roomConfig for isHost check
-    
+
     // Sync message deduplication tracking
-    const lastSyncSequenceRef = useRef<{[key: string]: number}>({});
-    const pendingSyncTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
-    
+    const lastSyncSequenceRef = useRef<{ [key: string]: number }>({});
+    const pendingSyncTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+
     // Helper function to process sync messages with deduplication
     const processSyncMessage = useCallback((data: any, source: 'websocket' | 'webrtc') => {
         if (!data.from_host) return; // Only process host sync messages
-        
+
         const syncType = data.type.replace('_sync', '');
         const sequenceId = data.sequence_id || data.sync_timestamp;
         const lastSequence = lastSyncSequenceRef.current[syncType] || 0;
-        
+
         // Skip if we've already processed this or newer sequence
         if (sequenceId <= lastSequence) {
             console.log(`Skipping duplicate ${syncType} sync from ${source} (seq: ${sequenceId}, last: ${lastSequence})`);
             return;
         }
-        
+
         // Clear any pending timeout for this sync type
         if (pendingSyncTimeoutRef.current[syncType]) {
             clearTimeout(pendingSyncTimeoutRef.current[syncType]);
         }
-        
+
         // Apply sync immediately for critical changes, or delay for small changes
         const isImportantChange = data.transport?.includes('backup') || data.state !== videoState.isPlaying;
         const applyDelay = source === 'websocket' && !isImportantChange ? 25 : 0;
-        
+
         const applySync = () => {
             lastSyncSequenceRef.current[syncType] = sequenceId;
-            
+
             if (syncType === 'video') {
                 setVideoState(prev => ({
                     url: data.url || prev.url,
@@ -404,7 +404,7 @@ export default function RoomPage() {
                 }));
             }
         };
-        
+
         if (applyDelay > 0) {
             pendingSyncTimeoutRef.current[syncType] = setTimeout(applySync, applyDelay);
         } else {
@@ -443,13 +443,15 @@ export default function RoomPage() {
             const safeNickname = encodeURIComponent(userName);
             const userImage = encodeURIComponent(user?.imageUrl || "");
 
-            console.log(`Attempting WebSocket connection to: ${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
+            console.log(`[Frontend Debug] Room ID from URL: '${roomId}'`);
+            console.log(`[Frontend Debug] User Name: '${userName}'`);
+            console.log(`[Frontend Debug] WebSocket URL: ${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
 
             const ws = new WebSocket(`${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}`);
             wsRef.current = ws;
 
             ws.onopen = () => {
-                console.log("Connected to Room WebSocket");
+                console.log(`[Frontend Debug] Connected to Room WebSocket for room: ${roomId}`);
                 setIsConnected(true);
 
                 ws.send(JSON.stringify({
@@ -726,7 +728,7 @@ export default function RoomPage() {
                 } catch (e) {
                     console.warn('Error cleaning up audio processor:', e);
                 }
-                
+
                 setIsMicOn(false);
 
                 // Broadcast mic off status (non-blocking)
@@ -843,7 +845,7 @@ export default function RoomPage() {
             } else if (err.message) {
                 errorMessage = `Failed to access microphone: ${err.message}`;
             }
-            
+
             alert(errorMessage);
         }
     };
@@ -875,25 +877,25 @@ export default function RoomPage() {
             // Smart sync strategy: Try WebRTC first, fallback to WebSocket
             const webrtcPeersCount = remoteStreams?.length || 0;
             const webrtcConnected = webrtcPeersCount > 0;
-            
+
             if (webrtcConnected) {
                 // Send via WebRTC Data Channel (Low Latency) - primary method
-                broadcastData({...syncMessage, transport: "webrtc"});
-                
+                broadcastData({ ...syncMessage, transport: "webrtc" });
+
                 // Only send via WebSocket as backup if WebRTC might be unreliable
                 // (e.g., if many peers or on important state changes like play/pause)
                 const isImportantChange = newState.isPlaying !== undefined || newState.url;
                 if (webrtcPeersCount > 3 || isImportantChange) {
                     setTimeout(() => {
                         if (wsRef.current?.readyState === WebSocket.OPEN) {
-                            wsRef.current.send(JSON.stringify({...syncMessage, transport: "websocket_backup"}));
+                            wsRef.current.send(JSON.stringify({ ...syncMessage, transport: "websocket_backup" }));
                         }
                     }, 50); // Small delay to avoid duplicate processing
                 }
             } else {
                 // No WebRTC peers, use WebSocket only
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({...syncMessage, transport: "websocket_primary"}));
+                    wsRef.current.send(JSON.stringify({ ...syncMessage, transport: "websocket_primary" }));
                 }
             }
         }
