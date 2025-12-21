@@ -64,24 +64,37 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
         }
     }, [currentUrl, isPlaying]); // React only when currentUrl changes
 
-    // Effect to sync video element with props
+    // Effect to sync video element with props with improved timing accuracy
     useEffect(() => {
         if (!videoRef.current || !videoState) return;
 
         const video = videoRef.current;
+        const timeDiff = Math.abs(video.currentTime - videoState.currentTime);
+        const syncThreshold = isHost ? 1.0 : 0.3; // Hosts are less strict, viewers are more strict
 
-        // Sync time if there's a significant difference
-        if (Math.abs(video.currentTime - videoState.currentTime) > 0.5) {
-            video.currentTime = videoState.currentTime;
+        // More precise time synchronization with network latency compensation
+        if (timeDiff > syncThreshold) {
+            // Calculate time adjustment based on when the sync message was sent
+            const now = Date.now();
+            const messageAge = videoState.timestamp ? (now - videoState.timestamp) / 1000 : 0;
+            const adjustedTime = videoState.currentTime + (isPlaying ? messageAge : 0);
+            
+            video.currentTime = adjustedTime;
+            console.log(`Video sync: adjusted time by ${timeDiff.toFixed(2)}s (message age: ${messageAge.toFixed(2)}s)`);
         }
 
-        // Sync play/pause state
+        // Sync play/pause state with retry logic for autoplay blocks
         if (isPlaying && video.paused) {
-            video.play().catch(e => console.log("Autoplay blocked", e));
+            video.play().catch(e => {
+                console.log("Autoplay blocked, retrying in 100ms", e);
+                setTimeout(() => {
+                    video.play().catch(e2 => console.log("Second autoplay attempt failed", e2));
+                }, 100);
+            });
         } else if (!isPlaying && !video.paused) {
             video.pause();
         }
-    }, [videoState?.timestamp, isPlaying]); // React to timestamp changes for forced updates
+    }, [videoState?.timestamp, isPlaying, isHost]); // React to timestamp changes for forced updates
 
     // Autoplay the next video when current one ends
     useEffect(() => {
@@ -263,24 +276,58 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
         }
     }, [onStateChange, isHost]);
 
-    // Periodic sync for hosts to keep everyone in sync and override non-host changes
+    // Adaptive periodic sync for hosts to keep everyone in sync with reduced drift
     useEffect(() => {
         if (!isHost || !currentUrl || !onStateChange) return;
 
-        const syncInterval = setInterval(() => {
+        let syncInterval: NodeJS.Timeout;
+        let lastSyncTime = 0;
+        
+        const performSync = () => {
             if (videoRef.current) {
                 const currentTime = videoRef.current.currentTime;
-                // Broadcast current state every 3 seconds to override any non-host interference
-                onStateChange({
-                    currentTime,
-                    isPlaying: !videoRef.current.paused,
-                    url: currentUrl
-                }, true);
+                const now = Date.now();
+                
+                // Only sync if enough time has passed or if playing state changed
+                const timeSinceLastSync = now - lastSyncTime;
+                const isPlaying = !videoRef.current.paused;
+                
+                if (timeSinceLastSync >= 2000 || Math.abs(currentTime - (videoState?.currentTime || 0)) > 0.5) {
+                    onStateChange({
+                        currentTime,
+                        isPlaying,
+                        url: currentUrl
+                    }, true);
+                    lastSyncTime = now;
+                }
             }
-        }, 3000); // Sync every 3 seconds (more frequent to override interference)
+        };
+        
+        // Use adaptive sync frequency - more frequent when playing, less when paused
+        const updateSyncFrequency = () => {
+            if (syncInterval) clearInterval(syncInterval);
+            
+            const frequency = videoRef.current && !videoRef.current.paused ? 1500 : 5000;
+            syncInterval = setInterval(performSync, frequency);
+        };
+        
+        updateSyncFrequency();
+        
+        // Listen for play/pause events to adjust sync frequency
+        const video = videoRef.current;
+        if (video) {
+            video.addEventListener('play', updateSyncFrequency);
+            video.addEventListener('pause', updateSyncFrequency);
+        }
 
-        return () => clearInterval(syncInterval);
-    }, [isHost, currentUrl, onStateChange]);
+        return () => {
+            if (syncInterval) clearInterval(syncInterval);
+            if (video) {
+                video.removeEventListener('play', updateSyncFrequency);
+                video.removeEventListener('pause', updateSyncFrequency);
+            }
+        };
+    }, [isHost, currentUrl, onStateChange, videoState?.currentTime]);
 
     const handleTimeUpdate = () => {
         // We generally rely on props, but for UI smooth progress bar we might need local state? 

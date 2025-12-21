@@ -15,9 +15,11 @@ import ChatSidebar, { Participant } from "@/components/room/ChatSidebar";
 import RoomSettingsDialog from "@/components/room/RoomSettingsDialog";
 import RoomHeader from "@/components/room/RoomHeader";
 import RoomMainContent from "@/components/room/RoomMainContent";
+import AudioSettings from "@/components/room/AudioSettings";
 import { useWebRTCMesh } from "@/hooks/useWebRTCMesh";
 import { sessionManager } from "@/lib/sessionManager";
 import { api } from "@/lib/api";
+import { AudioProcessor, createEnhancedAudioStream } from "@/lib/audioProcessor";
 import { type Room } from "@/lib/api";
 import { VideoPlaylistState } from "@/components/room/VideoPlayer"; // Import VideoPlaylistState
 import styles from "./page.module.css";
@@ -48,11 +50,12 @@ export default function RoomPage() {
     const [activeTab, setActiveTab] = useState<ActiveTab>("video");
     const [copied, setCopied] = useState(false);
     const [roomConfig, setRoomConfig] = useState<RoomConfig | null>(null);
-    const [onlineCount, setOnlineCount] = useState(3);
+    const [onlineCount, setOnlineCount] = useState(0);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [showEndRoomConfirm, setShowEndRoomConfirm] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+    const [showAudioSettings, setShowAudioSettings] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
     const [availableTabs, setAvailableTabs] = useState<ActiveTab[]>([]);
@@ -60,6 +63,8 @@ export default function RoomPage() {
     // Voice Chat State
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [isMicOn, setIsMicOn] = useState(false);
+    const [audioProcessor] = useState(() => new AudioProcessor());
+    const [audioQuality, setAudioQuality] = useState<'basic' | 'enhanced'>('enhanced');
     // Centralized State
     const [messages, setMessages] = useState<{ id: string; user: string; text: string; timestamp: Date }[]>([]);
     const [participants, setParticipants] = useState<Participant[]>([]);
@@ -348,6 +353,64 @@ export default function RoomPage() {
     const paramsRef = useRef(params);
     const userRef = useRef(user);
     const roomConfigRef = useRef(roomConfig); // Added to track roomConfig for isHost check
+    
+    // Sync message deduplication tracking
+    const lastSyncSequenceRef = useRef<{[key: string]: number}>({});
+    const pendingSyncTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
+    
+    // Helper function to process sync messages with deduplication
+    const processSyncMessage = useCallback((data: any, source: 'websocket' | 'webrtc') => {
+        if (!data.from_host) return; // Only process host sync messages
+        
+        const syncType = data.type.replace('_sync', '');
+        const sequenceId = data.sequence_id || data.sync_timestamp;
+        const lastSequence = lastSyncSequenceRef.current[syncType] || 0;
+        
+        // Skip if we've already processed this or newer sequence
+        if (sequenceId <= lastSequence) {
+            console.log(`Skipping duplicate ${syncType} sync from ${source} (seq: ${sequenceId}, last: ${lastSequence})`);
+            return;
+        }
+        
+        // Clear any pending timeout for this sync type
+        if (pendingSyncTimeoutRef.current[syncType]) {
+            clearTimeout(pendingSyncTimeoutRef.current[syncType]);
+        }
+        
+        // Apply sync immediately for critical changes, or delay for small changes
+        const isImportantChange = data.transport?.includes('backup') || data.state !== videoState.isPlaying;
+        const applyDelay = source === 'websocket' && !isImportantChange ? 25 : 0;
+        
+        const applySync = () => {
+            lastSyncSequenceRef.current[syncType] = sequenceId;
+            
+            if (syncType === 'video') {
+                setVideoState(prev => ({
+                    url: data.url || prev.url,
+                    isPlaying: data.state === "playing" || data.state === "buffering",
+                    currentTime: data.time || 0,
+                    timestamp: Date.now()
+                }));
+                if (data.extended_state) {
+                    setVideoPlaylistState(data.extended_state);
+                }
+            } else if (syncType === 'music') {
+                setMusicState(prev => ({
+                    track: data.track || prev.track,
+                    isPlaying: data.state === "playing" || data.state === "buffering",
+                    currentTime: data.time || 0,
+                    volume: data.volume !== undefined ? data.volume : prev.volume,
+                    timestamp: Date.now()
+                }));
+            }
+        };
+        
+        if (applyDelay > 0) {
+            pendingSyncTimeoutRef.current[syncType] = setTimeout(applySync, applyDelay);
+        } else {
+            applySync();
+        }
+    }, [videoState.isPlaying]);
 
     useEffect(() => {
         videoStateRef.current = videoState;
@@ -451,29 +514,11 @@ export default function RoomPage() {
                         // Use ref to ensure we use the latest handleSignal which has the open socket
                         handleSignalRef.current(data.user, data.signal);
                     } else if (data.type === "video_sync") {
-                        // Only apply video sync from host to ensure host controls the stream
-                        if (data.from_host) {
-                            setVideoState(prev => ({
-                                url: data.url || prev.url,
-                                isPlaying: data.state === "playing" || data.state === "buffering",
-                                currentTime: data.time || 0,
-                                timestamp: Date.now() // Force update
-                            }));
-                            if (data.extended_state) {
-                                setVideoPlaylistState(data.extended_state);
-                            }
-                        }
+                        // Use the deduplicated sync processor
+                        processSyncMessage(data, 'websocket');
                     } else if (data.type === "music_sync") {
-                        // Only apply music sync from host
-                        if (data.from_host) {
-                            setMusicState(prev => ({
-                                track: data.track || prev.track,
-                                isPlaying: data.state === "playing" || data.state === "buffering",
-                                currentTime: data.time || 0,
-                                volume: data.volume !== undefined ? data.volume : prev.volume,
-                                timestamp: Date.now()
-                            }));
-                        }
+                        // Use the deduplicated sync processor
+                        processSyncMessage(data, 'websocket');
                     } else if (data.type === "request_video_state") {
                         // Host should respond with current video state when requested
                         const currentVideoState = videoStateRef.current;
@@ -645,96 +690,161 @@ export default function RoomPage() {
         handleSignalRef.current = handleSignal;
     }, [broadcastData, handleSignal]);
 
-    // WebRTC Data Listener
+    // WebRTC Data Listener with deduplication
     useEffect(() => {
         onData((data) => {
-            // Handle incoming WebRTC data
+            // Handle incoming WebRTC data using the same deduplication logic
             if (data.type === "video_sync") {
-                // console.log("Received WebRTC Sync:", data);
-                if (data.from_host) {
-                    setVideoState(prev => ({
-                        url: data.url || prev.url,
-                        isPlaying: data.state === "playing" || data.state === "buffering",
-                        currentTime: data.time || 0,
-                        timestamp: Date.now()
-                    }));
-                    if (data.extended_state) {
-                        setVideoPlaylistState(data.extended_state);
-                    }
-                }
+                processSyncMessage(data, 'webrtc');
             } else if (data.type === "music_sync") {
-                if (data.from_host) {
-                    setMusicState(prev => ({
-                        track: data.track || prev.track,
-                        isPlaying: data.state === "playing" || data.state === "buffering",
-                        currentTime: data.time || 0,
-                        volume: data.volume !== undefined ? data.volume : prev.volume,
-                        timestamp: Date.now()
-                    }));
-                }
+                processSyncMessage(data, 'webrtc');
             }
         });
-    }, [onData]);
+    }, [onData, processSyncMessage]);
 
     const toggleMic = async () => {
-        if (isMicOn) {
-            // Turn off
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                setLocalStream(null);
-            }
-            setIsMicOn(false);
+        try {
+            if (isMicOn) {
+                // Turn off microphone
+                try {
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => {
+                            try {
+                                track.stop();
+                            } catch (e) {
+                                console.warn('Error stopping track:', e);
+                            }
+                        });
+                        setLocalStream(null);
+                    }
+                } catch (e) {
+                    console.warn('Error stopping local stream:', e);
+                }
 
-            // Broadcast mic off status
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                    type: "mic_status",
-                    user: user?.fullName || 'Guest',
-                    isMicOn: false
-                }));
-            }
-        } else {
-            // Turn on
-            try {
+                try {
+                    audioProcessor.cleanup();
+                } catch (e) {
+                    console.warn('Error cleaning up audio processor:', e);
+                }
+                
+                setIsMicOn(false);
+
+                // Broadcast mic off status (non-blocking)
+                try {
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({
+                            type: "mic_status",
+                            user: user?.fullName || 'Guest',
+                            isMicOn: false
+                        }));
+                    }
+                } catch (e) {
+                    console.warn('Error broadcasting mic status:', e);
+                }
+            } else {
+                // Turn on microphone
                 // Check if getUserMedia is available
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error("getUserMedia is not supported in this browser");
                 }
 
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-                setLocalStream(stream);
-                setIsMicOn(true);
+                let stream: MediaStream | null = null;
 
-                // Broadcast mic on status
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({
-                        type: "mic_status",
-                        user: user?.fullName || 'Guest',
-                        isMicOn: true
-                    }));
+                if (audioQuality === 'enhanced') {
+                    // Try enhanced audio processing first
+                    try {
+                        stream = await createEnhancedAudioStream(audioProcessor);
+                        if (stream) {
+                            console.log("Enhanced audio processing enabled");
+                        }
+                    } catch (enhancedError) {
+                        console.warn("Enhanced audio failed, falling back to basic:", enhancedError);
+                    }
                 }
 
-                console.log("Microphone enabled successfully");
-            } catch (err: any) {
-                console.error("Failed to get microphone access:", err);
+                // Fallback to basic audio if enhanced failed or not requested
+                if (!stream) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true,
+                                // Additional constraints for better quality
+                                sampleRate: 48000,
+                                channelCount: 1,
+                                volume: 1.0,
+                                // Chrome-specific enhancements
+                                googEchoCancellation: true,
+                                googAutoGainControl: true,
+                                googNoiseSuppression: true,
+                                googHighpassFilter: true,
+                                googTypingNoiseDetection: true
+                            } as MediaTrackConstraints
+                        });
+                        console.log("Basic audio processing enabled");
+                    } catch (basicError) {
+                        // Final fallback with minimal constraints
+                        console.warn("Advanced constraints failed, using basic:", basicError);
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true
+                            }
+                        });
+                    }
+                }
 
-                // Show user-friendly error based on error type
-                if (err.name === 'NotAllowedError') {
-                    alert("Microphone access denied. Please allow microphone permissions and try again.");
-                } else if (err.name === 'NotFoundError') {
-                    alert("No microphone found. Please check your audio devices.");
-                } else if (err.name === 'NotReadableError') {
-                    alert("Microphone is already in use by another application.");
+                if (stream) {
+                    setLocalStream(stream);
+                    setIsMicOn(true);
+
+                    // Broadcast mic on status (non-blocking)
+                    try {
+                        if (wsRef.current?.readyState === WebSocket.OPEN) {
+                            wsRef.current.send(JSON.stringify({
+                                type: "mic_status",
+                                user: user?.fullName || 'Guest',
+                                isMicOn: true
+                            }));
+                        }
+                    } catch (e) {
+                        console.warn('Error broadcasting mic status:', e);
+                    }
+
+                    console.log("Microphone enabled successfully with", audioQuality, "processing");
                 } else {
-                    alert("Failed to access microphone: " + err.message);
+                    throw new Error("Failed to obtain audio stream");
                 }
             }
+        } catch (err: any) {
+            console.error("Failed to toggle microphone:", err);
+
+            // Reset state on error to ensure UI consistency
+            setIsMicOn(false);
+            if (localStream) {
+                try {
+                    localStream.getTracks().forEach(track => track.stop());
+                    setLocalStream(null);
+                } catch (e) {
+                    console.warn('Error cleaning up on toggle error:', e);
+                }
+            }
+
+            // Show user-friendly error based on error type
+            let errorMessage = "Failed to access microphone";
+            if (err.name === 'NotAllowedError') {
+                errorMessage = "Microphone access denied. Please allow microphone permissions and try again.";
+            } else if (err.name === 'NotFoundError') {
+                errorMessage = "No microphone found. Please check your audio devices.";
+            } else if (err.name === 'NotReadableError') {
+                errorMessage = "Microphone is already in use by another application.";
+            } else if (err.message) {
+                errorMessage = `Failed to access microphone: ${err.message}`;
+            }
+            
+            alert(errorMessage);
         }
     };
 
@@ -762,12 +872,29 @@ export default function RoomPage() {
                 extended_state: videoPlaylistStateRef.current // Include playlist state
             };
 
-            // Send via WebRTC Data Channel (Low Latency)
-            broadcastData(syncMessage);
-
-            // Also send via WebSocket as fallback/redundancy
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify(syncMessage));
+            // Smart sync strategy: Try WebRTC first, fallback to WebSocket
+            const webrtcPeersCount = remoteStreams?.length || 0;
+            const webrtcConnected = webrtcPeersCount > 0;
+            
+            if (webrtcConnected) {
+                // Send via WebRTC Data Channel (Low Latency) - primary method
+                broadcastData({...syncMessage, transport: "webrtc"});
+                
+                // Only send via WebSocket as backup if WebRTC might be unreliable
+                // (e.g., if many peers or on important state changes like play/pause)
+                const isImportantChange = newState.isPlaying !== undefined || newState.url;
+                if (webrtcPeersCount > 3 || isImportantChange) {
+                    setTimeout(() => {
+                        if (wsRef.current?.readyState === WebSocket.OPEN) {
+                            wsRef.current.send(JSON.stringify({...syncMessage, transport: "websocket_backup"}));
+                        }
+                    }, 50); // Small delay to avoid duplicate processing
+                }
+            } else {
+                // No WebRTC peers, use WebSocket only
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({...syncMessage, transport: "websocket_primary"}));
+                }
             }
         }
     };
@@ -928,8 +1055,13 @@ export default function RoomPage() {
             if (wsRef.current) {
                 wsRef.current.close();
             }
+            // Clean up audio processor
+            audioProcessor.cleanup();
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
         };
-    }, []);
+    }, []); // Remove dependencies to only run on unmount
 
     if (!isLoaded || !user) {
         return <div className={styles.room}>Loading...</div>;
@@ -1000,6 +1132,7 @@ export default function RoomPage() {
                     isMicOn={isMicOn}
                     onToggleMic={toggleMic}
                     onOpenSettings={() => setShowSettingsDialog(true)}
+                    onOpenAudioSettings={() => setShowAudioSettings(true)}
                     isOpen={isSidebarOpen}
                     onToggleSidebar={toggleSidebar}
                     coHosts={roomConfig?.coHosts}
@@ -1070,6 +1203,18 @@ export default function RoomPage() {
                 />
             )
             }
+
+            {/* Audio Settings Dialog */}
+            <AudioSettings
+                open={showAudioSettings}
+                onOpenChange={setShowAudioSettings}
+                audioProcessor={audioProcessor}
+                localStream={localStream}
+                isMicOn={isMicOn}
+                onToggleMic={toggleMic}
+                audioQuality={audioQuality}
+                onAudioQualityChange={setAudioQuality}
+            />
 
             {/* Hidden Audio Elements for Voice Chat */}
             {remoteStreams.map(rs => (

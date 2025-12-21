@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import styles from "./ChatSidebar.module.css";
@@ -11,6 +12,8 @@ export interface Participant {
     imageUrl?: string;
     isHost?: boolean;
     id?: string;
+    email?: string;
+    clerkUserId?: string;
 }
 
 interface Message {
@@ -34,9 +37,11 @@ interface ChatSidebarProps {
     // Audio props
     activeStreams?: { peerId: string; stream: MediaStream }[];
     micStatuses?: { [userName: string]: boolean };
+    talkingUsers?: string[];
     isMicOn?: boolean;
     onToggleMic?: () => void;
     onOpenSettings?: () => void;
+    onOpenAudioSettings?: () => void;
     // Sidebar visibility props
     isOpen?: boolean;
     onToggleSidebar?: () => void;
@@ -58,9 +63,11 @@ export default function ChatSidebar({
     participants,
     activeStreams = [],
     micStatuses = {},
+    talkingUsers = [],
     isMicOn = false,
     onToggleMic,
     onOpenSettings,
+    onOpenAudioSettings,
     isOpen = true,
     onToggleSidebar,
     coHosts = [],
@@ -68,8 +75,10 @@ export default function ChatSidebar({
     onDemoteCoHost,
     isShrunken = false
 }: ChatSidebarProps) {
+    const { user: currentUser } = useUser();
     const [inputValue, setInputValue] = useState("");
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showParticipantsPane, setShowParticipantsPane] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -114,6 +123,63 @@ export default function ChatSidebar({
         setInputValue((prev) => prev + emojiData.emoji);
     };
 
+    const getUserRole = (user: Participant) => {
+        const isUserHost = user.isHost || (hostEmail && user.name === nickname);
+        const isCoHost = coHosts.includes(user.name);
+        
+        if (isUserHost) return 'host';
+        if (isCoHost) return 'cohost';
+        return 'guest';
+    };
+
+    const getUserBorderClass = (user: Participant) => {
+        const role = getUserRole(user);
+        const isTalking = talkingUsers.includes(user.name);
+        
+        let baseClass = '';
+        switch (role) {
+            case 'host':
+                baseClass = styles.hostBorder;
+                break;
+            case 'cohost':
+                baseClass = styles.coHostBorder;
+                break;
+            default:
+                baseClass = styles.guestBorder;
+        }
+        
+        return `${baseClass} ${isTalking ? styles.talkingPulse : ''}`;
+    };
+
+    const getParticipantImageUrl = (participant: Participant) => {
+        // If this participant is the current user, use Clerk's image
+        if (currentUser && (
+            participant.name === currentUser.fullName ||
+            participant.name === nickname ||
+            participant.email === currentUser.primaryEmailAddress?.emailAddress ||
+            participant.clerkUserId === currentUser.id
+        )) {
+            return currentUser.imageUrl || participant.imageUrl;
+        }
+        
+        // Otherwise use the participant's imageUrl
+        return participant.imageUrl;
+    };
+
+    const getParticipantDisplayName = (participant: Participant) => {
+        // If this participant is the current user, use Clerk's name
+        if (currentUser && (
+            participant.name === currentUser.fullName ||
+            participant.name === nickname ||
+            participant.email === currentUser.primaryEmailAddress?.emailAddress ||
+            participant.clerkUserId === currentUser.id
+        )) {
+            return currentUser.fullName || participant.name;
+        }
+        
+        return participant.name;
+    };
+
     const formatTime = (date: Date) => {
         const now = new Date();
         const messageDate = new Date(date); // Ensure messageDate is a Date object
@@ -124,7 +190,7 @@ export default function ChatSidebar({
 
         if (diffInSeconds < 60) return "now";
         if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-        
+
         const formatClockTime = (d: Date) => {
             let hours = d.getHours();
             const minutes = d.getMinutes();
@@ -138,7 +204,7 @@ export default function ChatSidebar({
         if (diffInHours < 24 && now.getDate() === messageDate.getDate()) {
             return `today at ${formatClockTime(messageDate)}`;
         }
-        
+
         // Check if messageDate is yesterday
         const yesterday = new Date(now);
         yesterday.setDate(now.getDate() - 1);
@@ -152,18 +218,18 @@ export default function ChatSidebar({
     };
 
     return (
-        <div className={`${styles.sidebar} ${!isOpen ? styles.collapsed : ''} ${isShrunken ? styles.sidebarShrunken : ''}`}>
-            {!isOpen && onToggleSidebar && (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`${styles.toggleButton} ${styles.toggleButtonCollapsed}`}
-                    onClick={onToggleSidebar}
-                    title="Expand Chat"
-                >
-                    <ChevronLeft size={20} />
-                </Button>
-            )}
+        <>
+            <div className={`${styles.sidebar} ${!isOpen ? styles.collapsed : ''} ${isShrunken ? styles.sidebarShrunken : ''}`}>
+                {/* Sidebar Toggle Button */}
+                {onToggleSidebar && (
+                    <div 
+                        className={styles.sidebarToggle}
+                        onClick={onToggleSidebar}
+                        title={isOpen ? "Collapse Chat" : "Expand Chat"}
+                    >
+                        {isOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                    </div>
+                )}
 
             {isOpen && (
                 <>
@@ -171,41 +237,14 @@ export default function ChatSidebar({
                     <div className={styles.header}>
                         <div className={styles.participantsToggle}>
                             <div className="flex items-center gap-3">
-                                <div className={styles.participantsHeaderIcon} title="People List">
-                                    <Users size={18} />
-                                </div>
-                                <h3 className={styles.participantsTitle}>Participants ({participants.length})</h3>
-                            </div>
-                            <div className="flex gap-2">
-                                {onToggleMic && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className={`h-8 w-8 p-0 ${isMicOn ? 'text-green-500' : 'text-slate-400'} hover:text-white`}
-                                        onClick={onToggleMic}
-                                        title={isMicOn ? "Mute Mic" : "Unmute Mic"}
-                                    >
-                                        {isMicOn ? <Mic size={16} /> : <MicOff size={16} />}
-                                    </Button>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-slate-400 hover:text-white"
-                                    onClick={onOpenSettings}
+                                <button 
+                                    className={styles.participantsHeaderIcon} 
+                                    title="Toggle Participants List"
+                                    onClick={() => setShowParticipantsPane(!showParticipantsPane)}
                                 >
-                                    <Settings size={16} />
-                                </Button>
-                                {onToggleSidebar && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-slate-400 hover:text-white"
-                                        onClick={onToggleSidebar}
-                                    >
-                                        <ChevronRight size={16} />
-                                    </Button>
-                                )}
+                                    <Users size={18} />
+                                </button>
+                                <h3 className={styles.participantsTitle}>Participants ({participants.length})</h3>
                             </div>
                         </div>
                     </div>
@@ -213,24 +252,39 @@ export default function ChatSidebar({
                     {/* Participants Horizontal Scroller */}
                     <div className={styles.participantsScroller}>
                         {participants.map((user, index) => {
-                            // Check if host based on object property or fallback to name/email matching
-                            const isUserHost = user.isHost || (hostEmail && user.name === nickname);
+                            const userRole = getUserRole(user);
+                            const borderClass = getUserBorderClass(user);
+                            const imageUrl = getParticipantImageUrl(user);
+                            const displayName = getParticipantDisplayName(user);
                             return (
-                                <div key={index} className={styles.participantAvatar} title={user.name}>
-                                    <div className={`${styles.avatarImage} ${isUserHost ? styles.hostBorder : ''}`} style={{
-                                        width: '100%', height: '100%',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: '#1e1e24',
-                                        overflow: 'hidden',
-                                        borderRadius: '50%'   // Ensure fully rounded
-                                    }}>
-                                        {user.imageUrl ? (
-                                            <img src={user.imageUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        ) : (
-                                            user.name.charAt(0).toUpperCase()
-                                        )}
-                                    </div>
-                                    {isUserHost && (
+                                <div key={index} className={`${styles.participantAvatar} ${borderClass} ${imageUrl ? styles.hasImage : ''}`} title={`${displayName} (${userRole})`}>
+                                    {imageUrl ? (
+                                        <img 
+                                            src={imageUrl} 
+                                            alt={displayName} 
+                                            style={{ 
+                                                width: '100%', 
+                                                height: '100%', 
+                                                objectFit: 'cover',
+                                                borderRadius: '50%'
+                                            }} 
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: '100%', 
+                                            height: '100%',
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            background: '#1e1e24',
+                                            borderRadius: '50%',
+                                            color: '#a78bfa',
+                                            fontWeight: 700
+                                        }}>
+                                            {displayName.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    {userRole === 'host' && (
                                         <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-[2px] shadow-sm z-10">
                                             <Crown size={10} fill="black" className="text-black" />
                                         </div>
@@ -257,22 +311,37 @@ export default function ChatSidebar({
                                     );
                                 }
 
+                                const msgImageUrl = isOwn && currentUser ? (currentUser.imageUrl || msg.imageUrl) : msg.imageUrl;
+                                const msgDisplayName = isOwn && currentUser ? (currentUser.fullName || msg.user) : msg.user;
+                                
                                 return (
                                     <div
                                         key={msg.id}
                                         className={`${styles.messageWrapper} ${isOwn ? styles.ownMessage : styles.otherMessage}`}
                                     >
-                                        <div className={`${styles.participantAvatar} ${msg.isHost ? styles.hostBorder : ''}`} style={{ width: 32, height: 32, fontSize: '0.8rem', overflow: 'hidden' }}>
-                                            {msg.imageUrl ? (
-                                                <img src={msg.imageUrl} alt={msg.user} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                                        <div className={`${styles.participantAvatar} ${msg.isHost ? styles.hostBorder : ''} ${msgImageUrl ? styles.hasImage : ''}`} style={{ width: 32, height: 32, fontSize: '0.8rem' }}>
+                                            {msgImageUrl ? (
+                                                <img src={msgImageUrl} alt={msgDisplayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                                             ) : (
-                                                msg.user.charAt(0).toUpperCase()
+                                                <div style={{
+                                                    width: '100%', 
+                                                    height: '100%',
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center',
+                                                    background: '#1e1e24',
+                                                    borderRadius: '50%',
+                                                    color: '#a78bfa',
+                                                    fontWeight: 700
+                                                }}>
+                                                    {msgDisplayName.charAt(0).toUpperCase()}
+                                                </div>
                                             )}
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '80%' }}>
                                             <div className={styles.messageHeader}>
                                                 <div className="flex items-center gap-1">
-                                                    <span className={`${styles.userName} ${msg.isHost ? styles.hostName : ''}`}>{msg.user}</span>
+                                                    <span className={`${styles.userName} ${msg.isHost ? styles.hostName : ''}`}>{msgDisplayName}</span>
                                                     {msg.isHost && <Crown size={12} className="text-yellow-500" fill="currentColor" />}
                                                 </div>
                                                 <span className={styles.timestamp}>{formatTime(msg.timestamp)}</span>
@@ -321,12 +390,48 @@ export default function ChatSidebar({
                                 onClick={handleSend}
                                 disabled={!inputValue.trim()}
                             >
-                                <Send size={18} />
+                                <Send size={18} style={{ transform: 'rotate(45deg)' }} />
                             </button>
                         </div>
                     </div>
                 </>
             )}
-        </div>
+            </div>
+
+            {/* Bottom Controls Card */}
+            <div className={styles.bottomControls}>
+                {onToggleMic && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-10 w-10 p-0 ${isMicOn ? 'text-green-500' : 'text-slate-400'} hover:text-white`}
+                        onClick={onToggleMic}
+                        title={isMicOn ? "Mute Mic" : "Unmute Mic"}
+                    >
+                        {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+                    </Button>
+                )}
+                {onOpenAudioSettings && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-10 w-10 p-0 text-slate-400 hover:text-white"
+                        onClick={onOpenAudioSettings}
+                        title="Audio Settings"
+                    >
+                        <Volume2 size={20} />
+                    </Button>
+                )}
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 p-0 text-slate-400 hover:text-white"
+                    onClick={onOpenSettings}
+                    title="Settings"
+                >
+                    <Settings size={20} />
+                </Button>
+            </div>
+        </>
     );
 }

@@ -1,14 +1,14 @@
 .header {
-    height: 80px;
-    padding: 0 32px;
+    height: 70px;
+    padding: 0 25px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--glass-panel);
+
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    margin: 10px 24px 0 24px;
+    margin: 5px 15px 0 15px;
     border-radius: 12px;
     position: sticky;
     top: 0;

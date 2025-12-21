@@ -1,0 +1,247 @@
+.container {
+    max-width: 500px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+}
+
+.content {
+    padding: 20px 0;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.sectionTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 12px;
+}
+
+.qualitySelector {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.qualityButton {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.qualityButton:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.qualityButton[data-variant="default"] {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.qualityDescription {
+    font-size: 12px;
+    color: #888;
+    font-weight: normal;
+}
+
+.warningText {
+    font-size: 12px;
+    color: #fbbf24;
+    margin-top: 8px;
+}
+
+.audioMeter {
+    width: 100%;
+    height: 24px;
+    background: #2a2a2a;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #404040;
+    position: relative;
+}
+
+.audioMeterFill {
+    height: 100%;
+    transition: width 0.1s ease, background-color 0.2s ease;
+    border-radius: inherit;
+}
+
+.audioInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 14px;
+    color: #ccc;
+}
+
+.micStatus {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.latencyInfo {
+    color: #888;
+    font-size: 12px;
+}
+
+.sliderGroup {
+    margin-bottom: 16px;
+}
+
+.sliderLabel {
+    display: block;
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #2a2a2a;
+    outline: none;
+    border: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.sliderMarks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #666;
+}
+
+.filterControls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.filterDescription {
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+    display: block;
+}
+
+.resetButton {
+    width: 100%;
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    color: #ccc;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.resetButton:hover {
+    background: #333;
+    border-color: #555;
+    color: #fff;
+}
+
+.metricsSection {
+    background: #222;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+
+.metric span:first-child {
+    color: #ccc;
+}
+
+.metric span:last-child {
+    color: #fff;
+    font-weight: 500;
+}
+
+.statusGood {
+    color: #4ade80 !important;
+}
+
+.statusBasic {
+    color: #fbbf24 !important;
+}
+
+/* Dark mode scrollbar */
+.content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.content::-webkit-scrollbar-thumb {
+    background: #404040;
+    border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

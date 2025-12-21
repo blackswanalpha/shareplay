@@ -145,15 +145,17 @@ export default function OnboardingPage() {
           Create virtual rooms to enjoy videos, music, and games with friends — all perfectly synced in real-time.
         </p>
 
-        {/* Google Login Button */}
-        <SignInButton mode="modal">
-          <button
-            className={styles.googleButtonWhiteTheme}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
-        </SignInButton>
+        {/* Google Login Button - Only show when user is not signed in */}
+        {!user && (
+          <SignInButton mode="modal">
+            <button
+              className={styles.googleButtonWhiteTheme}
+            >
+              <GoogleIcon />
+              Continue with Google
+            </button>
+          </SignInButton>
+        )}
 
 
 
