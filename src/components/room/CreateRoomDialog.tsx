@@ -21,6 +21,7 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
     const [roomName, setRoomName] = useState("");
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>(["video"]);
     const [isPublic, setIsPublic] = useState(true);
+    const [lobbyEnabled, setLobbyEnabled] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [createdRoom, setCreatedRoom] = useState<{ code: string; name: string } | null>(null);
     const [copied, setCopied] = useState(false);
@@ -55,6 +56,7 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
                 has_music: selectedFeatures.includes("music"),
                 has_games: selectedFeatures.includes("games"),
                 is_public: isPublic,
+                lobby_enabled: lobbyEnabled,
             }, user.primaryEmailAddress.emailAddress, user.fullName);
 
             setCreatedRoom({ code: newRoom.code, name: newRoom.name });
@@ -95,6 +97,7 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
             setRoomName("");
             setSelectedFeatures(["video"]);
             setIsPublic(true);
+            setLobbyEnabled(false);
             setCreatedRoom(null);
             setCopied(false);
         }, 200);
@@ -198,6 +201,24 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
                                         <span className={styles.privacyDesc}>Only invited friends can join</span>
                                     </div>
                                 </label>
+                            </div>
+                        </div>
+
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>Admission Lobby</label>
+                            <div
+                                className={`${styles.lobbyToggle} ${lobbyEnabled ? styles.selected : ""}`}
+                                onClick={() => setLobbyEnabled(!lobbyEnabled)}
+                            >
+                                <div className={styles.privacyText}>
+                                    <span className={styles.privacyTitle}>Enable Waiting Room</span>
+                                    <span className={styles.privacyDesc}>Host must manually admit participants</span>
+                                </div>
+                                <div
+                                    className={`${styles.toggleSwitch} ${lobbyEnabled ? styles.toggleOn : ""}`}
+                                >
+                                    <div className={styles.toggleHandle} />
+                                </div>
                             </div>
                         </div>
                     </DialogContent>

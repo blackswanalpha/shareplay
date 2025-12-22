@@ -8,11 +8,27 @@ export interface Room {
     has_music: boolean;
     has_games: boolean;
     is_public: boolean;
+    lobby_enabled: boolean;
     host_id: number;
     host_email?: string;
-    created_at: string;
     co_hosts?: string[];
+    is_host?: boolean;
+    created_at: string;
     current_video_url?: string;
+}
+
+export interface LobbyUser {
+    user_id: number;
+    email: string;
+    full_name?: string;
+    image_url?: string;
+    waiting_since: string;
+}
+
+export interface RoomSettingsUpdate {
+    name?: string;
+    is_public?: boolean;
+    lobby_enabled?: boolean;
 }
 
 export interface CreateRoomData {
@@ -21,6 +37,7 @@ export interface CreateRoomData {
     has_music: boolean;
     has_games: boolean;
     is_public: boolean;
+    lobby_enabled: boolean;
 }
 
 // Helper to get access token using the user's session email
@@ -65,20 +82,13 @@ async function getAccessToken(userEmail: string, fullName?: string | null) {
             }
         }
 
-        // If that fails, fall back to a default user (legacy behavior)
-        if (!res.ok) {
-            console.log(`Auth failed for ${userEmail}, trying fallback user`);
-            res = await fetch(`${API_URL}/auth/token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({
-                    username: "user1@shareplay.com", // Fallback to known user
-                    password: "user123",
-                }),
-            });
-        }
 
-        if (!res.ok) throw new Error("Failed to authenticate");
+
+        if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Unknown error');
+            console.error(`Auth failed for ${userEmail}: ${res.status} ${errorText}`);
+            throw new Error(`Authentication failed for ${userEmail}: ${res.status}`);
+        }
         const data = await res.json();
         return data.access_token;
     } catch (error) {
@@ -112,8 +122,20 @@ export const api = {
         return res.json();
     },
 
-    async getRoom(code: string): Promise<Room> {
-        const res = await fetch(`${API_URL}/rooms/${code}`);
+    async getRoom(code: string, userEmail?: string): Promise<Room> {
+        let headers: Record<string, string> = {};
+        if (userEmail) {
+            try {
+                const token = await getAccessToken(userEmail);
+                headers["Authorization"] = `Bearer ${token}`;
+            } catch (e) {
+                console.warn("Failed to get token for getRoom, continuing as guest", e);
+            }
+        }
+
+        const res = await fetch(`${API_URL}/rooms/${code}`, {
+            headers
+        });
         if (!res.ok) {
             const errorText = await res.text().catch(() => 'Unknown error');
             console.error(`Room ${code} not found. Status: ${res.status}, Response: ${errorText}`);
@@ -192,6 +214,54 @@ export const api = {
 
         if (!res.ok) {
             throw new Error("Failed to delete room");
+        }
+        return res.json();
+    },
+
+    async updateRoomSettings(code: string, settings: RoomSettingsUpdate, userEmail: string): Promise<Room> {
+        const token = await getAccessToken(userEmail);
+        const res = await fetch(`${API_URL}/rooms/${code}/settings`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(settings),
+        });
+
+        if (!res.ok) {
+            throw new Error("Failed to update room settings");
+        }
+        return res.json();
+    },
+
+    async getLobbyUsers(code: string, userEmail: string): Promise<LobbyUser[]> {
+        const token = await getAccessToken(userEmail);
+        const res = await fetch(`${API_URL}/rooms/${code}/lobby`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error("Failed to fetch lobby users");
+        }
+        return res.json();
+    },
+
+    async lobbyAction(code: string, userEmail: string, targetEmail: string, action: 'admit' | 'deny'): Promise<{ message: string }> {
+        const token = await getAccessToken(userEmail);
+        const res = await fetch(`${API_URL}/rooms/${code}/lobby/action`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ user_email: targetEmail, action }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`Failed to ${action} user`);
         }
         return res.json();
     }

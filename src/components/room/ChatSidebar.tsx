@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users, Volume2 } from "lucide-react";
+import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users, Volume2, UserX } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
+import LobbyManagement from "./LobbyManagement";
 import styles from "./ChatSidebar.module.css";
 
 export interface Participant {
@@ -50,6 +51,8 @@ interface ChatSidebarProps {
     onPromoteToCoHost?: (userEmail: string) => void;
     onDemoteCoHost?: (userEmail: string) => void;
     isShrunken?: boolean;
+    lobbyEnabled?: boolean;
+    lobbyCount?: number;
 }
 
 export default function ChatSidebar({
@@ -73,12 +76,14 @@ export default function ChatSidebar({
     coHosts = [],
     onPromoteToCoHost,
     onDemoteCoHost,
-    isShrunken = false
+    isShrunken = false,
+    lobbyEnabled = false,
+    lobbyCount = 0
 }: ChatSidebarProps) {
     const { user: currentUser } = useUser();
     const [inputValue, setInputValue] = useState("");
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [showParticipantsPane, setShowParticipantsPane] = useState(false);
+    const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'lobby'>('chat');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -126,7 +131,7 @@ export default function ChatSidebar({
     const getUserRole = (user: Participant) => {
         const isUserHost = user.isHost || (hostEmail && user.name === nickname);
         const isCoHost = coHosts.includes(user.name);
-        
+
         if (isUserHost) return 'host';
         if (isCoHost) return 'cohost';
         return 'guest';
@@ -135,7 +140,7 @@ export default function ChatSidebar({
     const getUserBorderClass = (user: Participant) => {
         const role = getUserRole(user);
         const isTalking = talkingUsers.includes(user.name);
-        
+
         let baseClass = '';
         switch (role) {
             case 'host':
@@ -147,7 +152,7 @@ export default function ChatSidebar({
             default:
                 baseClass = styles.guestBorder;
         }
-        
+
         return `${baseClass} ${isTalking ? styles.talkingPulse : ''}`;
     };
 
@@ -161,7 +166,7 @@ export default function ChatSidebar({
         )) {
             return currentUser.imageUrl || participant.imageUrl;
         }
-        
+
         // Otherwise use the participant's imageUrl
         return participant.imageUrl;
     };
@@ -176,7 +181,7 @@ export default function ChatSidebar({
         )) {
             return currentUser.fullName || participant.name;
         }
-        
+
         return participant.name;
     };
 
@@ -222,7 +227,7 @@ export default function ChatSidebar({
             <div className={`${styles.sidebar} ${!isOpen ? styles.collapsed : ''} ${isShrunken ? styles.sidebarShrunken : ''}`}>
                 {/* Sidebar Toggle Button */}
                 {onToggleSidebar && (
-                    <div 
+                    <div
                         className={styles.sidebarToggle}
                         onClick={onToggleSidebar}
                         title={isOpen ? "Collapse Chat" : "Expand Chat"}
@@ -231,171 +236,240 @@ export default function ChatSidebar({
                     </div>
                 )}
 
-            {isOpen && (
-                <>
-                    {/* Header with Participants Toggle/Title */}
-                    <div className={styles.header}>
-                        <div className={styles.participantsToggle}>
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    className={styles.participantsHeaderIcon} 
-                                    title="Toggle Participants List"
-                                    onClick={() => setShowParticipantsPane(!showParticipantsPane)}
+                {isOpen && (
+                    <>
+                        {/* Header with Tabs */}
+                        <div className={styles.header}>
+                            <div className={styles.tabs}>
+                                <button
+                                    className={`${styles.tabButton} ${activeTab === 'chat' ? styles.activeTab : ''}`}
+                                    onClick={() => setActiveTab('chat')}
+                                    title="Chat"
+                                >
+                                    <Send size={18} className="-rotate-45" />
+                                    <span>Chat</span>
+                                </button>
+                                <button
+                                    className={`${styles.tabButton} ${activeTab === 'participants' ? styles.activeTab : ''}`}
+                                    onClick={() => setActiveTab('participants')}
+                                    title="Participants"
                                 >
                                     <Users size={18} />
+                                    <span>People</span>
+                                    <span className={styles.tabBadge}>{participants.length}</span>
                                 </button>
-                                <h3 className={styles.participantsTitle}>Participants ({participants.length})</h3>
+                                {(isHost || coHosts.includes(nickname)) && lobbyEnabled && (
+                                    <button
+                                        className={`${styles.tabButton} ${activeTab === 'lobby' ? styles.activeTab : ''}`}
+                                        onClick={() => setActiveTab('lobby')}
+                                        title="Lobby"
+                                    >
+                                        <UserX size={18} />
+                                        <span>Lobby</span>
+                                        {lobbyCount > 0 && (
+                                            <span className={`${styles.tabBadge} ${styles.lobbyBadge}`}>{lobbyCount}</span>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
-                    </div>
 
-                    {/* Participants Horizontal Scroller */}
-                    <div className={styles.participantsScroller}>
-                        {participants.map((user, index) => {
-                            const userRole = getUserRole(user);
-                            const borderClass = getUserBorderClass(user);
-                            const imageUrl = getParticipantImageUrl(user);
-                            const displayName = getParticipantDisplayName(user);
-                            return (
-                                <div key={index} className={`${styles.participantAvatar} ${borderClass} ${imageUrl ? styles.hasImage : ''}`} title={`${displayName} (${userRole})`}>
-                                    {imageUrl ? (
-                                        <img 
-                                            src={imageUrl} 
-                                            alt={displayName} 
-                                            style={{ 
-                                                width: '100%', 
-                                                height: '100%', 
-                                                objectFit: 'cover',
-                                                borderRadius: '50%'
-                                            }} 
-                                        />
-                                    ) : (
-                                        <div style={{
-                                            width: '100%', 
-                                            height: '100%',
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center',
-                                            background: '#1e1e24',
-                                            borderRadius: '50%',
-                                            color: '#a78bfa',
-                                            fontWeight: 700
-                                        }}>
-                                            {displayName.charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
-                                    {userRole === 'host' && (
-                                        <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-[2px] shadow-sm z-10">
-                                            <Crown size={10} fill="black" className="text-black" />
-                                        </div>
-                                    )}
+                        {activeTab === 'participants' && (
+                            <div className={styles.participantsPane}>
+                                {/* Participants List */}
+                                <div className={styles.scrollerContent}>
+                                    {participants.map((user, index) => {
+                                        const userRole = getUserRole(user);
+                                        const borderClass = getUserBorderClass(user);
+                                        const imageUrl = getParticipantImageUrl(user);
+                                        const displayName = getParticipantDisplayName(user);
+                                        return (
+                                            <div key={index} className={styles.participantItem}>
+                                                <div className={`${styles.participantAvatar} ${borderClass} ${imageUrl ? styles.hasImage : ''}`}>
+                                                    {imageUrl ? (
+                                                        <img src={imageUrl} alt={displayName} />
+                                                    ) : (
+                                                        <div className={styles.initialsAvatar}>
+                                                            {displayName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    {userRole === 'host' && (
+                                                        <div className={styles.crownContainer}>
+                                                            <Crown size={10} fill="black" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className={styles.participantInfo}>
+                                                    <span className={styles.participantName}>{displayName}</span>
+                                                    <span className={styles.participantRole}>{userRole}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            );
-                        })}
-                    </div>
+                            </div>
+                        )}
 
-                    {/* Chat Area */}
-                    <div className={styles.chatContainer}>
-                        <div className={styles.messages}>
-                            {messages.map((msg) => {
-                                const isSystem = msg.user === "System";
-                                const isOwn = msg.user === nickname;
+                        {activeTab === 'lobby' && (
+                            <div className={styles.lobbyPane}>
+                                <LobbyManagement
+                                    roomCode={roomCode}
+                                    userEmail={nickname}
+                                />
+                            </div>
+                        )}
 
-                                if (isSystem) {
-                                    return (
-                                        <div key={msg.id} className={styles.systemMessage}>
-                                            <div className={styles.messageBubble}>
-                                                {msg.text}
+                        {activeTab === 'chat' && (
+                            <>
+                                {/* Participants Horizontal Scroller */}
+                                <div className={styles.participantsScroller}>
+                                    {participants.map((user, index) => {
+                                        const userRole = getUserRole(user);
+                                        const borderClass = getUserBorderClass(user);
+                                        const imageUrl = getParticipantImageUrl(user);
+                                        const displayName = getParticipantDisplayName(user);
+                                        return (
+                                            <div key={index} className={`${styles.participantAvatar} ${borderClass} ${imageUrl ? styles.hasImage : ''}`} title={`${displayName} (${userRole})`}>
+                                                {imageUrl ? (
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt={displayName}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover',
+                                                            borderRadius: '50%'
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        background: '#1e1e24',
+                                                        borderRadius: '50%',
+                                                        color: '#a78bfa',
+                                                        fontWeight: 700
+                                                    }}>
+                                                        {displayName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                {userRole === 'host' && (
+                                                    <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-[2px] shadow-sm z-10">
+                                                        <Crown size={10} fill="black" className="text-black" />
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    );
-                                }
+                                        );
+                                    })}
+                                </div>
 
-                                const msgImageUrl = isOwn && currentUser ? (currentUser.imageUrl || msg.imageUrl) : msg.imageUrl;
-                                const msgDisplayName = isOwn && currentUser ? (currentUser.fullName || msg.user) : msg.user;
-                                
-                                return (
-                                    <div
-                                        key={msg.id}
-                                        className={`${styles.messageWrapper} ${isOwn ? styles.ownMessage : styles.otherMessage}`}
-                                    >
-                                        <div className={`${styles.participantAvatar} ${msg.isHost ? styles.hostBorder : ''} ${msgImageUrl ? styles.hasImage : ''}`} style={{ width: 32, height: 32, fontSize: '0.8rem' }}>
-                                            {msgImageUrl ? (
-                                                <img src={msgImageUrl} alt={msgDisplayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                                            ) : (
-                                                <div style={{
-                                                    width: '100%', 
-                                                    height: '100%',
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    justifyContent: 'center',
-                                                    background: '#1e1e24',
-                                                    borderRadius: '50%',
-                                                    color: '#a78bfa',
-                                                    fontWeight: 700
-                                                }}>
-                                                    {msgDisplayName.charAt(0).toUpperCase()}
+                                {/* Chat Area */}
+                                <div className={styles.chatContainer}>
+                                    <div className={styles.messages}>
+                                        {messages.map((msg) => {
+                                            const isSystem = msg.user === "System";
+                                            const isOwn = msg.user === nickname;
+
+                                            if (isSystem) {
+                                                return (
+                                                    <div key={msg.id} className={styles.systemMessage}>
+                                                        <div className={styles.messageBubble}>
+                                                            {msg.text}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            const msgImageUrl = isOwn && currentUser ? (currentUser.imageUrl || msg.imageUrl) : msg.imageUrl;
+                                            const msgDisplayName = isOwn && currentUser ? (currentUser.fullName || msg.user) : msg.user;
+
+                                            return (
+                                                <div
+                                                    key={msg.id}
+                                                    className={`${styles.messageWrapper} ${isOwn ? styles.ownMessage : styles.otherMessage}`}
+                                                >
+                                                    <div className={`${styles.participantAvatar} ${msg.isHost ? styles.hostBorder : ''} ${msgImageUrl ? styles.hasImage : ''}`} style={{ width: 32, height: 32, fontSize: '0.8rem' }}>
+                                                        {msgImageUrl ? (
+                                                            <img src={msgImageUrl} alt={msgDisplayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                                                        ) : (
+                                                            <div style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                background: '#1e1e24',
+                                                                borderRadius: '50%',
+                                                                color: '#a78bfa',
+                                                                fontWeight: 700
+                                                            }}>
+                                                                {msgDisplayName.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '80%' }}>
+                                                        <div className={styles.messageHeader}>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className={`${styles.userName} ${msg.isHost ? styles.hostName : ''}`}>{msgDisplayName}</span>
+                                                                {msg.isHost && <Crown size={12} className="text-yellow-500" fill="currentColor" />}
+                                                            </div>
+                                                            <span className={styles.timestamp}>{formatTime(msg.timestamp)}</span>
+                                                        </div>
+                                                        <div className={styles.messageBubble}>
+                                                            {msg.text}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '80%' }}>
-                                            <div className={styles.messageHeader}>
-                                                <div className="flex items-center gap-1">
-                                                    <span className={`${styles.userName} ${msg.isHost ? styles.hostName : ''}`}>{msgDisplayName}</span>
-                                                    {msg.isHost && <Crown size={12} className="text-yellow-500" fill="currentColor" />}
-                                                </div>
-                                                <span className={styles.timestamp}>{formatTime(msg.timestamp)}</span>
-                                            </div>
-                                            <div className={styles.messageBubble}>
-                                                {msg.text}
-                                            </div>
-                                        </div>
+                                            );
+                                        })}
+                                        <div ref={messagesEndRef} />
                                     </div>
-                                );
-                            })}
-                            <div ref={messagesEndRef} />
-                        </div>
 
-                        {/* Input Area */}
-                        <div className={styles.inputContainer}>
-                            <button
-                                className={styles.emojiButton}
-                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                            >
-                                <Smile size={20} className="text-slate-400 hover:text-white transition-colors" />
-                            </button>
+                                    {/* Input Area */}
+                                    <div className={styles.inputContainer}>
+                                        <button
+                                            className={styles.emojiButton}
+                                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                        >
+                                            <Smile size={20} className="text-slate-400 hover:text-white transition-colors" />
+                                        </button>
 
-                            {showEmojiPicker && (
-                                <div className={styles.emojiPickerContainer} ref={pickerRef}>
-                                    <EmojiPicker
-                                        onEmojiClick={handleEmojiClick}
-                                        theme={Theme.DARK}
-                                        width={300}
-                                        height={400}
-                                    />
+                                        {showEmojiPicker && (
+                                            <div className={styles.emojiPickerContainer} ref={pickerRef}>
+                                                <EmojiPicker
+                                                    onEmojiClick={handleEmojiClick}
+                                                    theme={Theme.DARK}
+                                                    width={300}
+                                                    height={400}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <input
+                                            type="text"
+                                            placeholder="Type a message..."
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            onKeyDown={handleKeyPress}
+                                            className={styles.input}
+                                        />
+
+                                        <button
+                                            className={styles.sendButton}
+                                            onClick={handleSend}
+                                            disabled={!inputValue.trim()}
+                                        >
+                                            <Send size={18} style={{ transform: 'rotate(45deg)' }} />
+                                        </button>
+                                    </div>
                                 </div>
-                            )}
-
-                            <input
-                                type="text"
-                                placeholder="Type a message..."
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleKeyPress}
-                                className={styles.input}
-                            />
-
-                            <button
-                                className={styles.sendButton}
-                                onClick={handleSend}
-                                disabled={!inputValue.trim()}
-                            >
-                                <Send size={18} style={{ transform: 'rotate(45deg)' }} />
-                            </button>
-                        </div>
-                    </div>
-                </>
-            )}
+                            </>
+                        )}
+                    </>
+                )}
             </div>
 
             {/* Bottom Controls Card */}

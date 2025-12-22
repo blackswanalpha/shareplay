@@ -12,6 +12,7 @@ import VideoPlayer from "@/components/room/VideoPlayer";
 import MusicPlayer from "@/components/room/MusicPlayer";
 import GamesSection from "@/components/room/GamesSection";
 import ChatSidebar, { Participant } from "@/components/room/ChatSidebar";
+import LobbyPage from "@/components/room/LobbyPage";
 import RoomSettingsDialog from "@/components/room/RoomSettingsDialog";
 import RoomHeader from "@/components/room/RoomHeader";
 import RoomMainContent from "@/components/room/RoomMainContent";
@@ -40,6 +41,8 @@ export interface RoomConfig {
     hostId: string;
     hostEmail?: string;
     coHosts?: string[]; // Array of co-host emails
+    lobbyEnabled?: boolean;
+    isHost?: boolean;
 }
 export default function RoomPage() {
     const params = useParams();
@@ -58,6 +61,8 @@ export default function RoomPage() {
     const [showAudioSettings, setShowAudioSettings] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
+    const [isAdmitted, setIsAdmitted] = useState(true);
+    const [lobbyCount, setLobbyCount] = useState(0);
     const [availableTabs, setAvailableTabs] = useState<ActiveTab[]>([]);
     const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
     // Voice Chat State
@@ -97,20 +102,23 @@ export default function RoomPage() {
         timestamp: 0
     });
 
-    const isHost = roomConfig?.hostEmail === user?.primaryEmailAddress?.emailAddress; // Fixed: compare email with email, not email with id
+    const isHost = Boolean(roomConfig?.isHost || roomConfig?.hostEmail === user?.primaryEmailAddress?.emailAddress ||
+        (roomConfig?.hostEmail && (user?.fullName === roomConfig.hostEmail || user?.primaryEmailAddress?.emailAddress?.split('@')[0] === roomConfig.hostEmail)));
     const isCoHost = roomConfig?.coHosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
     const isHostOrCoHost = isHost || isCoHost;
 
     const wsRef = useRef<WebSocket | null>(null);
     const fetchRoomDetailsRef = useRef<(() => Promise<Room | null>) | undefined>(undefined);
     const isLeavingRoomRef = useRef(false);
+    const initializedRoomIdRef = useRef<string | null>(null);
 
     // Extract fetchRoomDetails to be reusable
     const fetchRoomDetails = useCallback(async (): Promise<Room | null> => {
         try {
             // Try API first
             const { api } = await import("@/lib/api");
-            const room = await api.getRoom(roomId);
+            const userEmail = user?.primaryEmailAddress?.emailAddress || user?.fullName || '';
+            const room = await api.getRoom(roomId, userEmail);
 
             const tabs: ActiveTab[] = [];
             if (room.has_video) tabs.push("video");
@@ -128,11 +136,13 @@ export default function RoomPage() {
                 hostId: room.host_id.toString(),
                 hostEmail: room.host_email,
                 coHosts: room.co_hosts || [],
+                lobbyEnabled: room.lobby_enabled,
+                isHost: room.is_host,
                 type: "custom"
             });
 
             // After setting room config, request current video state if we're not the host
-            const isCurrentUserHost = room.host_email === user?.primaryEmailAddress?.emailAddress;
+            const isCurrentUserHost = room.is_host ?? (room.host_email === user?.primaryEmailAddress?.emailAddress);
             const isCurrentUserCoHost = room.co_hosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
 
             // Update user role in online users list if they are already there
@@ -155,6 +165,12 @@ export default function RoomPage() {
                 // Ignore tracking errors
             }
 
+            if (!isCurrentUserHost && room.lobby_enabled) {
+                // If lobby is enabled and we're not the host, we might be unadmitted
+                // WebSocket will tell us, but we'll assume we're waiting until confirmed
+                setIsAdmitted(false);
+            }
+
             // Sync video state if needed (and we are not host)
             if (!isCurrentUserHost && room.current_video_url) {
                 // ... sync logic
@@ -163,31 +179,41 @@ export default function RoomPage() {
             if (!isCurrentUserHost) {
                 // Request video state with a short delay to ensure WebSocket is ready
                 setTimeout(() => {
-                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    if (wsRef.current?.readyState === WebSocket.OPEN && !videoStateRef.current.url) {
                         wsRef.current.send(JSON.stringify({
                             type: "request_video_state",
                             requesting_user: user?.fullName || 'Guest'
                         }));
                     }
-                }, 100);
+                }, 500); // Increased delay slightly for reliability
 
-                // Retry after 2 seconds if no video is loaded (fallback)
+                // Final fallback after 3 seconds if no video is loaded
                 setTimeout(() => {
-                    if (wsRef.current?.readyState === WebSocket.OPEN && !videoState.url) {
+                    if (wsRef.current?.readyState === WebSocket.OPEN && !videoStateRef.current.url) {
                         wsRef.current.send(JSON.stringify({
                             type: "request_video_state",
                             requesting_user: user?.fullName || 'Guest'
                         }));
                     }
-                }, 2000);
+                }, 3000);
             }
+
+            // If host/co-host, fetch lobby count
+            if (isCurrentUserHost || (room.co_hosts || []).includes(user?.primaryEmailAddress?.emailAddress || '')) {
+                if (room.lobby_enabled) {
+                    api.getLobbyUsers(roomId, user?.primaryEmailAddress?.emailAddress || '').then(users => {
+                        setLobbyCount(users.length);
+                    }).catch(err => console.error("Lobby fetch error:", err));
+                }
+            }
+
             return room;
         } catch (error) {
             console.error("Failed to fetch room from API", error);
             // Fallback logic could go here
             return null;
         }
-    }, [roomId, user?.id, videoState.url]);
+    }, [roomId, user?.id]); // Removed videoState.url dependency to break the loop
 
     // Update the ref whenever the function changes
     useEffect(() => {
@@ -343,8 +369,12 @@ export default function RoomPage() {
             }
         };
 
+        if (!isLoaded || !user) return;
+        if (initializedRoomIdRef.current === roomId) return;
+
+        initializedRoomIdRef.current = roomId;
         initializeRoom();
-    }, [isLoaded, router, user, fetchRoomDetails]);
+    }, [isLoaded, router, user, roomId]);
 
     // Refs for accessing up-to-date state inside WebSocket callbacks without dependency loops
     const videoStateRef = useRef(videoState);
@@ -611,6 +641,32 @@ export default function RoomPage() {
                             ...prev,
                             coHosts: (prev.coHosts || []).filter(email => email !== data.userEmail)
                         } : null);
+                    } else if (data.type === "lobby_status") {
+                        // User received an update about their lobby status
+                        if (data.status === "admitted") {
+                            setIsAdmitted(true);
+                            setMessages(prev => [...prev, {
+                                id: Date.now().toString(),
+                                user: "System",
+                                text: "You have been admitted to the room!",
+                                timestamp: new Date()
+                            }]);
+                            // Request state now that we are admitted
+                            wsRef.current?.send(JSON.stringify({
+                                type: "request_video_state",
+                                requesting_user: user?.fullName || 'Guest'
+                            }));
+                        } else if (data.status === "denied") {
+                            alert("Your request to join this room was denied.");
+                            router.push("/dashboard");
+                        }
+                    } else if (data.type === "lobby_update") {
+                        // Host/co-host received notification about lobby changes
+                        if (isHostOrCoHost) {
+                            api.getLobbyUsers(roomId, user?.primaryEmailAddress?.emailAddress || '').then(users => {
+                                setLobbyCount(users.length);
+                            }).catch(err => console.error("Lobby update fetch error:", err));
+                        }
                     }
                 } catch (e) {
                     console.warn("WebSocket Parse Error", e);
@@ -640,11 +696,11 @@ export default function RoomPage() {
         connectWebSocket();
 
         return () => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
+            if (wsRef.current && wsRef.current.readyState < 2) { // 2 = CLOSING
                 wsRef.current.close(1000, "Component unmounting");
             }
         };
-    }, [roomId, user?.fullName]);
+    }, [roomId, user?.id]); // Use user.id for stability
 
 
     // We need a workaround for the circular dependency.
@@ -1069,6 +1125,16 @@ export default function RoomPage() {
         return <div className={styles.room}>Loading...</div>;
     }
 
+    if (!isAdmitted && roomConfig && !isHost) {
+        return (
+            <LobbyPage
+                room={roomConfig}
+                user={user}
+                onLeave={() => router.push("/dashboard")}
+            />
+        );
+    }
+
     return (
         <div className={styles.room}>
             {/* Session Restoration Notification */}
@@ -1137,10 +1203,10 @@ export default function RoomPage() {
                     onOpenAudioSettings={() => setShowAudioSettings(true)}
                     isOpen={isSidebarOpen}
                     onToggleSidebar={toggleSidebar}
-                    coHosts={roomConfig?.coHosts}
-                    onPromoteToCoHost={promoteToCoHost}
                     onDemoteCoHost={demoteCoHost}
                     isShrunken={isPlaylistOpen}
+                    lobbyEnabled={roomConfig?.lobbyEnabled}
+                    lobbyCount={lobbyCount}
                 />
             </div>
 
