@@ -80,6 +80,11 @@ class SessionManager {
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
+    // Ensure we have a token before making authenticated requests
+    if (!this.token && !endpoint.includes('/public/')) {
+      console.warn('No authentication token available for request to:', endpoint);
+    }
+
     const headers: Record<string, string> = {
       ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
       ...(options.headers as Record<string, string>),
@@ -89,6 +94,9 @@ class SessionManager {
       headers['Content-Type'] = 'application/json';
     }
 
+    console.log(`Making request to: ${this.apiUrl}${endpoint}`);
+    console.log('Request headers:', { ...headers, Authorization: this.token ? 'Bearer [REDACTED]' : 'Not set' });
+
     const response = await fetch(`${this.apiUrl}${endpoint}`, {
       ...options,
       headers,
@@ -97,8 +105,11 @@ class SessionManager {
     if (!response.ok) {
       // Parse error details if available
       let errorMessage = `API request failed: ${response.statusText}`;
+      let errorDetails = null;
+      
       try {
         const errorData = await response.json();
+        errorDetails = errorData;
         if (errorData.detail) {
           errorMessage = errorData.detail;
         }
@@ -106,8 +117,12 @@ class SessionManager {
         // Keep default error message if parsing fails
       }
 
+      console.error(`Request failed - Status: ${response.status}, URL: ${this.apiUrl}${endpoint}`);
+      console.error('Error details:', errorDetails);
+
       const error = new Error(errorMessage);
       (error as any).status = response.status;
+      (error as any).details = errorDetails;
       throw error;
     }
 

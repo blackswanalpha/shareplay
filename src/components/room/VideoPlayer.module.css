@@ -127,6 +127,36 @@
     line-height: 1.5;
 }
 
+.hostNote {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    color: rgba(59, 130, 246, 0.9) !important;
+    font-size: 0.8rem !important;
+    max-width: 350px !important;
+}
+
+.apiWarning {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    color: rgba(255, 193, 7, 0.9) !important;
+    font-size: 0.8rem !important;
+    max-width: 350px !important;
+}
+
+.debugInfo {
+    margin-top: 16px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    opacity: 0.7;
+}
+
 /* Load Video Button */
 .loadButton {
     background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);

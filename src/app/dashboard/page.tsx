@@ -54,11 +54,17 @@ export default function DashboardPage() {
             const checkActiveSession = async () => {
                 try {
                     // First get auth token for sessionManager
+                    console.log("Getting token for email:", email);
                     const token = await api.getTokenForEmail(email);
+                    console.log("Token obtained successfully");
+                    
                     sessionManager.setAuthToken(token);
+                    console.log("Token set in sessionManager");
 
                     // Check if user has any active sessions
+                    console.log("Checking for active sessions...");
                     const activeSessions = await sessionManager.getUserSessions(true);
+                    console.log("Active sessions retrieved:", activeSessions);
 
                     // Only redirect if user has an active session (is currently in a room)
                     if (activeSessions && activeSessions.length > 0) {
@@ -75,6 +81,15 @@ export default function DashboardPage() {
                     }
                 } catch (error) {
                     console.error("Failed to check for active sessions", error);
+                    
+                    // Log additional details about the error
+                    if (error instanceof Error) {
+                        console.error("Error message:", error.message);
+                        console.error("Error status:", (error as any).status);
+                    }
+                    
+                    // Don't redirect on authentication errors - user can still use dashboard
+                    // This prevents the dashboard from being unusable if there are auth issues
                 }
             };
             checkActiveSession();

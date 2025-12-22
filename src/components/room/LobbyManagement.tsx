@@ -17,12 +17,16 @@ export default function LobbyManagement({ roomCode, userEmail, onAdmit, onDeny }
     const [users, setUsers] = useState<LobbyUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchLobby = async () => {
         try {
+            setError(null);
             const lobbyUsers = await api.getLobbyUsers(roomCode, userEmail);
             setUsers(lobbyUsers);
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Failed to fetch lobby users";
+            setError(errorMessage);
             console.error("Failed to fetch lobby users:", error);
         } finally {
             setLoading(false);
@@ -57,6 +61,16 @@ export default function LobbyManagement({ roomCode, userEmail, onAdmit, onDeny }
             <div className={styles.loadingContainer}>
                 <div className={styles.spinner}></div>
                 <span>Loading requests...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className={styles.errorContainer}>
+                <div className={styles.errorMessage}>
+                    <p>{error}</p>
+                </div>
             </div>
         );
     }

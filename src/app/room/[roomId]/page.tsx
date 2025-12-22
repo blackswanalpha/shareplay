@@ -1282,6 +1282,7 @@ export default function RoomPage() {
                 <ChatSidebar
                     roomCode={roomId}
                     nickname={user?.fullName || "Guest"}
+                    userEmail={user?.primaryEmailAddress?.emailAddress}
                     isHost={isHost}
                     hostEmail={roomConfig?.hostEmail}
                     setOnlineCount={setOnlineCount}

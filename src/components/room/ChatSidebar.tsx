@@ -31,6 +31,7 @@ interface Message {
 interface ChatSidebarProps {
     roomCode: string;
     nickname: string;
+    userEmail?: string;
     isHost?: boolean;
     hostEmail?: string;
     setOnlineCount?: (count: number) => void;
@@ -60,6 +61,7 @@ interface ChatSidebarProps {
 export default function ChatSidebar({
     roomCode,
     nickname,
+    userEmail,
     isHost = false,
     hostEmail,
     setOnlineCount,
@@ -330,7 +332,7 @@ export default function ChatSidebar({
                             <div className={styles.lobbyPane}>
                                 <LobbyManagement
                                     roomCode={roomCode}
-                                    userEmail={nickname}
+                                    userEmail={userEmail || nickname}
                                 />
                             </div>
                         )}

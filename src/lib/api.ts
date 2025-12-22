@@ -97,9 +97,17 @@ async function getAccessToken(userEmail: string, fullName?: string | null) {
         if (!res.ok) {
             const errorText = await res.text().catch(() => 'Unknown error');
             console.error(`Auth failed for ${userEmail}: ${res.status} ${errorText}`);
-            throw new Error(`Authentication failed for ${userEmail}: ${res.status}`);
+            throw new Error(`Authentication failed for ${userEmail}: ${res.status} - ${errorText}`);
         }
+        
         const data = await res.json();
+        
+        if (!data.access_token) {
+            console.error('No access_token in response:', data);
+            throw new Error('Authentication response missing access_token');
+        }
+        
+        console.log(`Successfully authenticated ${userEmail}`);
         return data.access_token;
     } catch (error) {
         console.error("Auth error", error);
@@ -254,7 +262,14 @@ export const api = {
         });
 
         if (!res.ok) {
-            throw new Error("Failed to fetch lobby users");
+            if (res.status === 403) {
+                throw new Error("Only hosts can view the lobby");
+            }
+            if (res.status === 404) {
+                throw new Error("Room not found");
+            }
+            const errorData = await res.json().catch(() => null);
+            throw new Error(errorData?.detail || "Failed to fetch lobby users");
         }
         return res.json();
     },
