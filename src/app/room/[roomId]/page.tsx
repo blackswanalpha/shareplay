@@ -102,6 +102,12 @@ export default function RoomPage() {
         timestamp: 0
     });
 
+    // Unified user identifier used for WebSocket, WebRTC, and UI identification
+    const currentUserIdentifier = useMemo(() =>
+        user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Guest',
+        [user?.primaryEmailAddress?.emailAddress, user?.fullName]
+    );
+
     const isHost = Boolean(roomConfig?.isHost || (roomConfig?.hostEmail && user?.primaryEmailAddress?.emailAddress === roomConfig.hostEmail));
     const isCoHost = roomConfig?.coHosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
     const isHostOrCoHost = isHost || isCoHost;
@@ -140,7 +146,7 @@ export default function RoomPage() {
         try {
             // Try API first
             const { api } = await import("@/lib/api");
-            const userEmail = user?.primaryEmailAddress?.emailAddress || user?.fullName || '';
+            const userEmail = currentUserIdentifier;
             const room = await api.getRoom(roomId, userEmail);
 
             const tabs: ActiveTab[] = [];
@@ -254,7 +260,7 @@ export default function RoomPage() {
                 url: videoState.url,
                 sync_timestamp: Date.now(),
                 is_host: isHost,
-                from_host: isHost,
+                from_host: isHostOrCoHost,
                 extended_state: {
                     playlist: newPlaylistState.playlist,
                     current_index: newPlaylistState.current_index,
@@ -499,8 +505,8 @@ export default function RoomPage() {
             }
 
             const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
-            // Use email as the primary identifier if available, otherwise fallback to full name or Guest
-            const userName = user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Guest';
+            // Use unified identifier
+            const userName = currentUserIdentifier;
             const safeNickname = encodeURIComponent(userName);
             const userImage = encodeURIComponent(user?.imageUrl || "");
             const connectionId = Math.random().toString(36).substring(7);
@@ -705,7 +711,7 @@ export default function RoomPage() {
                             // Request state now that we are admitted
                             wsRef.current?.send(JSON.stringify({
                                 type: "request_video_state",
-                                requesting_user: user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Guest'
+                                requesting_user: currentUserIdentifier
                             }));
                         } else if (data.status === "denied") {
                             alert("Your request to join this room was denied.");
@@ -804,9 +810,11 @@ export default function RoomPage() {
         const currentRoomConfig = roomConfigRef.current;
         const currentUser = userRef.current;
         const currentVideoState = videoStateRef.current;
-        const isCurrentUserHost = currentRoomConfig?.hostEmail === currentUser?.primaryEmailAddress?.emailAddress;
+        const currentUserEmail = currentUser?.primaryEmailAddress?.emailAddress || "";
+        const isCurrentUserHost = currentRoomConfig?.hostEmail === currentUserEmail;
+        const isCurrentUserCoHost = currentRoomConfig?.coHosts?.includes(currentUserEmail) || false;
 
-        if (isCurrentUserHost && currentVideoState.url) {
+        if ((isCurrentUserHost || isCurrentUserCoHost) && currentVideoState?.url) {
             console.log(`WebRTC: Sending initial sync to ${peerId}`);
             const syncMessage = {
                 type: "video_sync",
@@ -814,7 +822,7 @@ export default function RoomPage() {
                 time: currentVideoState.currentTime,
                 url: currentVideoState.url,
                 sync_timestamp: Date.now(),
-                is_host: true,
+                is_host: isCurrentUserHost,
                 from_host: true,
                 extended_state: videoPlaylistStateRef.current // Include playlist state
             };
@@ -828,7 +836,7 @@ export default function RoomPage() {
     const { handleSignal, broadcastData, onData, remoteStreams } = useWebRTCMesh({
         socket: isConnected ? wsRef.current : null,
         roomCode: roomId,
-        currentUser: user?.fullName || "Guest",
+        currentUser: currentUserIdentifier,
         participants: participantNames,
         localStream,
         onPeerConnected: onPeerConnectAction
@@ -884,7 +892,7 @@ export default function RoomPage() {
                     if (wsRef.current?.readyState === WebSocket.OPEN) {
                         wsRef.current.send(JSON.stringify({
                             type: "mic_status",
-                            user: user?.fullName || 'Guest',
+                            user: currentUserIdentifier,
                             isMicOn: false
                         }));
                     }
@@ -955,7 +963,7 @@ export default function RoomPage() {
                         if (wsRef.current?.readyState === WebSocket.OPEN) {
                             wsRef.current.send(JSON.stringify({
                                 type: "mic_status",
-                                user: user?.fullName || 'Guest',
+                                user: currentUserIdentifier,
                                 isMicOn: true
                             }));
                         }
@@ -1018,7 +1026,7 @@ export default function RoomPage() {
                 url: updated.url,
                 sync_timestamp: Date.now(),
                 is_host: isHost,
-                from_host: isHost,
+                from_host: isHostOrCoHost,
                 extended_state: videoPlaylistStateRef.current // Include playlist state
             };
 
@@ -1064,7 +1072,7 @@ export default function RoomPage() {
                 volume: updated.volume,
                 sync_timestamp: Date.now(),
                 is_host: isHost,
-                from_host: isHost,
+                from_host: isHostOrCoHost,
                 extended_state: {
                     shuffle: false, // Could be extended
                     repeat: false
@@ -1281,7 +1289,7 @@ export default function RoomPage() {
                 {/* Chat Sidebar */}
                 <ChatSidebar
                     roomCode={roomId}
-                    nickname={user?.fullName || "Guest"}
+                    nickname={currentUserIdentifier}
                     userEmail={user?.primaryEmailAddress?.emailAddress}
                     isHost={isHost}
                     hostEmail={roomConfig?.hostEmail}
