@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users, Volume2, UserX } from "lucide-react";
+import { Send, Smile, Mic, MicOff, Settings, ChevronLeft, ChevronRight, Crown, UserPlus, UserMinus, Users, Volume2, UserX, Activity } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import LobbyManagement from "./LobbyManagement";
+import ActivityTable from "./ActivityTable";
 import styles from "./ChatSidebar.module.css";
 
 export interface Participant {
     name: string;
     imageUrl?: string;
     isHost?: boolean;
+    role?: string;
     id?: string;
     email?: string;
     clerkUserId?: string;
@@ -83,7 +85,7 @@ export default function ChatSidebar({
     const { user: currentUser } = useUser();
     const [inputValue, setInputValue] = useState("");
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'lobby'>('chat');
+    const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'lobby' | 'activity'>('chat');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -129,8 +131,12 @@ export default function ChatSidebar({
     };
 
     const getUserRole = (user: Participant) => {
-        const isUserHost = user.isHost || (hostEmail && user.name === nickname);
-        const isCoHost = coHosts.includes(user.name);
+        // Prioritize role from backend if available
+        if (user.role === 'owner' || user.role === 'host') return 'host';
+        if (user.role === 'co-host' || user.role === 'cohost') return 'cohost';
+
+        const isUserHost = user.isHost || (hostEmail && (user.name === nickname || user.email === nickname));
+        const isCoHost = coHosts.includes(user.name) || (user.email && coHosts.includes(user.email));
 
         if (isUserHost) return 'host';
         if (isCoHost) return 'cohost';
@@ -172,17 +178,17 @@ export default function ChatSidebar({
     };
 
     const getParticipantDisplayName = (participant: Participant) => {
-        // If this participant is the current user, use Clerk's name
+        // If this participant is the current user, use Clerk's email
         if (currentUser && (
             participant.name === currentUser.fullName ||
             participant.name === nickname ||
             participant.email === currentUser.primaryEmailAddress?.emailAddress ||
             participant.clerkUserId === currentUser.id
         )) {
-            return currentUser.fullName || participant.name;
+            return currentUser.primaryEmailAddress?.emailAddress || participant.email || participant.name;
         }
 
-        return participant.name;
+        return participant.email || participant.name;
     };
 
     const formatTime = (date: Date) => {
@@ -271,6 +277,16 @@ export default function ChatSidebar({
                                         )}
                                     </button>
                                 )}
+                                {(isHost || coHosts.includes(nickname)) && (
+                                    <button
+                                        className={`${styles.tabButton} ${activeTab === 'activity' ? styles.activeTab : ''}`}
+                                        onClick={() => setActiveTab('activity')}
+                                        title="System Presence"
+                                    >
+                                        <Activity size={18} />
+                                        <span>Log</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -315,6 +331,15 @@ export default function ChatSidebar({
                                 <LobbyManagement
                                     roomCode={roomCode}
                                     userEmail={nickname}
+                                />
+                            </div>
+                        )}
+
+                        {activeTab === 'activity' && (
+                            <div className={styles.activityPane}>
+                                <ActivityTable
+                                    roomCode={roomCode}
+                                    userEmail={currentUser?.primaryEmailAddress?.emailAddress || ""}
                                 />
                             </div>
                         )}

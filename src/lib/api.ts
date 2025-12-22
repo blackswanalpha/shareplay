@@ -13,6 +13,7 @@ export interface Room {
     host_email?: string;
     co_hosts?: string[];
     is_host?: boolean;
+    current_user_status?: "admitted" | "waiting" | "denied";
     created_at: string;
     current_video_url?: string;
 }
@@ -29,6 +30,15 @@ export interface RoomSettingsUpdate {
     name?: string;
     is_public?: boolean;
     lobby_enabled?: boolean;
+}
+
+export interface RoomLobbyActivityResponse {
+    user_id: number;
+    user_email: string;
+    user_name?: string;
+    location: "lobby" | "room";
+    is_active: boolean;
+    last_seen_at: string;
 }
 
 export interface CreateRoomData {
@@ -262,6 +272,20 @@ export const api = {
 
         if (!res.ok) {
             throw new Error(`Failed to ${action} user`);
+        }
+        return res.json();
+    },
+
+    async getRoomActivities(code: string, userEmail: string): Promise<RoomLobbyActivityResponse[]> {
+        const token = await api.getTokenForEmail(userEmail);
+        const res = await fetch(`${API_URL}/rooms/${code}/activities`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error("Failed to fetch room activities");
         }
         return res.json();
     }

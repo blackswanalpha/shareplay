@@ -1,0 +1,180 @@
+.container {
+    padding: 1rem;
+    background: rgba(15, 15, 20, 0.4);
+    border-radius: 12px;
+    border: 1px border-white/5;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.titleArea {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f8fafc;
+    margin: 0;
+}
+
+.utils {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.lastUpdated {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+
+.refreshBtn {
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    color: #64748b;
+}
+
+.refreshBtn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.tableWrapper {
+    flex: 1;
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.table th {
+    text-align: left;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.7rem;
+    position: sticky;
+    top: 0;
+}
+
+.table td {
+    padding: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.02);
+    color: #e2e8f0;
+}
+
+.userNameArea {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a78bfa;
+}
+
+.userText {
+    display: flex;
+    flex-direction: column;
+}
+
+.userName {
+    font-weight: 500;
+    color: #f8fafc;
+}
+
+.userEmail {
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.locationTag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.inRoom {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.inLobby {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.statusDot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.online {
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+}
+
+.offline {
+    background: #64748b;
+}
+
+.timestamp {
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+}
+
+.empty {
+    text-align: center;
+    padding: 2rem;
+    color: #64748b;
+    font-style: italic;
+}

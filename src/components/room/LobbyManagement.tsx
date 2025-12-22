@@ -86,7 +86,7 @@ export default function LobbyManagement({ roomCode, userEmail, onAdmit, onDeny }
                                     )}
                                 </div>
                                 <div className={styles.userDetails}>
-                                    <span className={styles.userName}>{user.full_name || user.email.split('@')[0]}</span>
+                                    <span className={styles.userName}>{user.email}</span>
                                     <div className={styles.waitingInfo}>
                                         <Clock size={12} />
                                         <span>{new Date(user.waiting_since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

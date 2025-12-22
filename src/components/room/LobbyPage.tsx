@@ -38,7 +38,7 @@ interface LobbyPageProps {
 }
 
 export default function LobbyPage({ room, user, onLeave }: LobbyPageProps) {
-    const hostDisplayName = room.hostEmail?.split('@')[0] || "Host";
+    const hostDisplayName = room.hostEmail || "Host";
 
     return (
         <div className={styles.lobbyContainer}>

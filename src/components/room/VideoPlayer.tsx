@@ -40,6 +40,47 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
     const [localInputUrl, setLocalInputUrl] = useState("");
     const [showPlaylist, setShowPlaylist] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const ytPlayerRef = useRef<any>(null);
+    const ytContainerRef = useRef<HTMLDivElement>(null);
+    const isYtReadyRef = useRef(false);
+    const [ytApiLoaded, setYtApiLoaded] = useState(false);
+
+    // Initial API load with multiple layers of readiness checks
+    useEffect(() => {
+        const checkYTApi = () => {
+            if ((window as any).YT && (window as any).YT.Player) {
+                console.log("[VideoPlayer] YouTube API detected via polling");
+                setYtApiLoaded(true);
+                return true;
+            }
+            return false;
+        };
+
+        if (checkYTApi()) return;
+
+        // Standard event listener
+        (window as any).onYouTubeIframeAPIReady = () => {
+            console.log("[VideoPlayer] YouTube API ready via event");
+            setYtApiLoaded(true);
+        };
+
+        // Inject script if not already present
+        if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+            const tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+        }
+
+        // Secondary polling fallback
+        const pollInterval = setInterval(() => {
+            if (checkYTApi()) {
+                clearInterval(pollInterval);
+            }
+        }, 1000);
+
+        return () => clearInterval(pollInterval);
+    }, []);
 
     // Derived state from props or fallback to local defaults if needed (but we aim for controlled)
     const currentUrl = videoState?.url || "";
@@ -51,50 +92,159 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
 
     useEffect(() => {
-        if (!videoRef.current) return;
-        const video = videoRef.current;
+        const isYouTube = currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be");
+        if (isYouTube) {
+            if (!ytApiLoaded || !ytContainerRef.current) return;
 
-        // If the URL has changed, update the video source and load it
-        if (video.src !== currentUrl) {
-            video.src = currentUrl;
-            video.load(); // Important for HTML5 video element to pick up new source
-            if (isPlaying) {
-                video.play().catch(e => console.log("Autoplay blocked on URL change", e));
+            // Improved YouTube ID extraction
+            const ytRegex = /(?:v=|youtu\.be\/|embed\/|watch\?v=|&v=)([^#&?]+)/;
+            const match = currentUrl.match(ytRegex);
+            const videoId = match ? match[1] : null;
+
+            if (!videoId) {
+                console.warn("[VideoPlayer] Could not extract YouTube ID from:", currentUrl);
+                return;
+            }
+
+            if (!ytPlayerRef.current) {
+                const containerId = "yt-player-container";
+                const container = document.getElementById(containerId);
+
+                if (!container) {
+                    console.warn("[VideoPlayer] YT Container element not found in DOM yet");
+                    return;
+                }
+
+                console.log("[VideoPlayer] Creating new YouTube Player for ID:", videoId);
+                try {
+                    ytPlayerRef.current = new (window as any).YT.Player(containerId, {
+                        videoId: videoId,
+                        playerVars: {
+                            autoplay: isPlaying ? 1 : 0,
+                            controls: 0,
+                            disablekb: 1,
+                            fs: 0,
+                            modestbranding: 1,
+                            rel: 0,
+                            origin: window.location.origin,
+                            enablejsapi: 1
+                        },
+                        events: {
+                            onReady: () => {
+                                console.log("[VideoPlayer] YouTube Player Ready");
+                                isYtReadyRef.current = true;
+                                if (isPlaying) ytPlayerRef.current.playVideo();
+                                ytPlayerRef.current.seekTo(videoState?.currentTime || 0, true);
+                            },
+                            onStateChange: (event: any) => {
+                                if (!isHost || !onStateChange) return;
+
+                                // YT states: -1: unstarted, 0: ended, 1: playing, 2: paused, 3: buffering, 5: cued
+                                const state = event.data;
+                                const time = ytPlayerRef.current.getCurrentTime();
+
+                                if (state === (window as any).YT.PlayerState.PLAYING) {
+                                    onStateChange({ isPlaying: true, currentTime: time }, true);
+                                } else if (state === (window as any).YT.PlayerState.PAUSED) {
+                                    onStateChange({ isPlaying: false, currentTime: time }, true);
+                                }
+                            },
+                            onError: (e: any) => {
+                                console.error("[VideoPlayer] YouTube Player Error:", e.data);
+                                // If error is severe, try to reset player
+                                if (e.data === 5 || e.data === 101) {
+                                    ytPlayerRef.current = null;
+                                    isYtReadyRef.current = false;
+                                }
+                            }
+                        }
+                    });
+                } catch (err) {
+                    console.error("[VideoPlayer] Failed to construct YT Player:", err);
+                }
+            } else {
+                // Determine if we need to load a new video
+                try {
+                    const loadedVideoUrl = ytPlayerRef.current.getVideoUrl?.() || "";
+                    if (!loadedVideoUrl.includes(videoId)) {
+                        console.log("[VideoPlayer] Loading new Video ID:", videoId);
+                        ytPlayerRef.current.loadVideoById({
+                            videoId: videoId,
+                            startSeconds: videoState?.currentTime || 0
+                        });
+                    }
+                } catch (err) {
+                    console.warn("[VideoPlayer] Failed to check/load video by ID:", err);
+                    // Force re-init if the object is broken
+                    ytPlayerRef.current = null;
+                }
+            }
+        } else {
+            // HTML5 Video
+            if (!videoRef.current || !currentUrl) return;
+            const video = videoRef.current;
+
+            if (video.src !== currentUrl) {
+                console.log("[VideoPlayer] Loading HTML5 Video:", currentUrl);
+                video.src = currentUrl;
+                video.load();
+                if (isPlaying) {
+                    video.play().catch(e => console.log("Autoplay blocked on URL change", e));
+                }
             }
         }
-    }, [currentUrl, isPlaying]); // React only when currentUrl changes
+    }, [currentUrl, ytApiLoaded]);
 
     // Effect to sync video element with props with improved timing accuracy
     useEffect(() => {
-        if (!videoRef.current || !videoState) return;
+        const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
+        if (isYouTube) {
+            if (!ytPlayerRef.current || !isYtReadyRef.current || !videoState) return;
 
-        const video = videoRef.current;
-        const timeDiff = Math.abs(video.currentTime - videoState.currentTime);
-        const syncThreshold = isHost ? 1.0 : 0.3; // Hosts are less strict, viewers are more strict
+            const yt = ytPlayerRef.current;
+            const ytTime = yt.getCurrentTime();
+            const timeDiff = Math.abs(ytTime - videoState.currentTime);
+            const syncThreshold = isHost ? 1.0 : 0.5;
 
-        // More precise time synchronization with network latency compensation
-        if (timeDiff > syncThreshold) {
-            // Calculate time adjustment based on when the sync message was sent
-            const now = Date.now();
-            const messageAge = videoState.timestamp ? (now - videoState.timestamp) / 1000 : 0;
-            const adjustedTime = videoState.currentTime + (isPlaying ? messageAge : 0);
-            
-            video.currentTime = adjustedTime;
-            console.log(`Video sync: adjusted time by ${timeDiff.toFixed(2)}s (message age: ${messageAge.toFixed(2)}s)`);
+            if (timeDiff > syncThreshold) {
+                const now = Date.now();
+                const messageAge = videoState.timestamp ? (now - videoState.timestamp) / 1000 : 0;
+                const adjustedTime = videoState.currentTime + (isPlaying ? messageAge : 0);
+                yt.seekTo(adjustedTime, true);
+            }
+
+            const ytState = yt.getPlayerState();
+            if (isPlaying && ytState !== (window as any).YT.PlayerState.PLAYING) {
+                yt.playVideo();
+            } else if (!isPlaying && ytState === (window as any).YT.PlayerState.PLAYING) {
+                yt.pauseVideo();
+            }
+        } else {
+            if (!videoRef.current || !videoState) return;
+
+            const video = videoRef.current;
+            const timeDiff = Math.abs(video.currentTime - videoState.currentTime);
+            const syncThreshold = isHost ? 1.0 : 0.3;
+
+            if (timeDiff > syncThreshold) {
+                const now = Date.now();
+                const messageAge = videoState.timestamp ? (now - videoState.timestamp) / 1000 : 0;
+                const adjustedTime = videoState.currentTime + (isPlaying ? messageAge : 0);
+
+                video.currentTime = adjustedTime;
+            }
+
+            if (isPlaying && video.paused) {
+                video.play().catch(e => {
+                    setTimeout(() => {
+                        video.play().catch(e2 => console.log("Retry failed", e2));
+                    }, 100);
+                });
+            } else if (!isPlaying && !video.paused) {
+                video.pause();
+            }
         }
-
-        // Sync play/pause state with retry logic for autoplay blocks
-        if (isPlaying && video.paused) {
-            video.play().catch(e => {
-                console.log("Autoplay blocked, retrying in 100ms", e);
-                setTimeout(() => {
-                    video.play().catch(e2 => console.log("Second autoplay attempt failed", e2));
-                }, 100);
-            });
-        } else if (!isPlaying && !video.paused) {
-            video.pause();
-        }
-    }, [videoState?.timestamp, isPlaying, isHost]); // React to timestamp changes for forced updates
+    }, [videoState?.timestamp, isPlaying, isHost, currentUrl]);
 
     // Autoplay the next video when current one ends
     useEffect(() => {
@@ -121,24 +271,22 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
 
     const extractVideoInfo = useCallback(async (url: string): Promise<Omit<PlaylistItem, 'id'>> => {
-        const youtubeMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+        const youtubeMatch = url.match(/(?:v=|youtu\.be\/|embed\/|watch\?v=|&v=)([^#&?]+)/);
         if (youtubeMatch) {
             const videoId = youtubeMatch[1];
-            // In a real app, you'd fetch duration and thumbnail from YouTube API
-            // For now, using placeholders
             return {
-                url: `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`,
+                url: `https://www.youtube.com/watch?v=${videoId}`,
                 title: `YouTube Video (${videoId})`,
                 type: "youtube",
-                duration: 0, // Placeholder
-                thumbnail: `https://img.youtube.com/vi/${videoId}/0.jpg`, // Placeholder thumbnail
+                duration: 0,
+                thumbnail: `https://img.youtube.com/vi/${videoId}/0.jpg`,
             };
         }
         return {
             url: url,
             title: url.split("/").pop() || "Direct Video",
             type: "direct",
-            duration: 0, // Placeholder
+            duration: 0,
             thumbnail: undefined,
         };
     }, []);
@@ -256,14 +404,13 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
     const togglePlay = useCallback(() => {
         if (onStateChange) {
-            const currentTime = videoRef.current?.currentTime || 0;
-            if (isHost) {
-                onStateChange({ isPlaying: !isPlaying, currentTime }, true);
-            } else {
-                onStateChange({ isPlaying: !isPlaying, currentTime }, false);
-            }
+            const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
+            const currentTime = isYouTube
+                ? ytPlayerRef.current?.getCurrentTime() || 0
+                : videoRef.current?.currentTime || 0;
+            onStateChange({ isPlaying: !isPlaying, currentTime }, isHost);
         }
-    }, [onStateChange, isPlaying, isHost]);
+    }, [onStateChange, isPlaying, isHost, currentUrl]);
 
     const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const time = parseFloat(e.target.value);
@@ -282,37 +429,52 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
         let syncInterval: NodeJS.Timeout;
         let lastSyncTime = 0;
-        
+
         const performSync = () => {
-            if (videoRef.current) {
+            const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
+            if (isYouTube) {
+                if (ytPlayerRef.current && isYtReadyRef.current) {
+                    const currentTime = ytPlayerRef.current.getCurrentTime();
+                    const now = Date.now();
+                    const ytState = ytPlayerRef.current.getPlayerState();
+                    const isPlaying = ytState === (window as any).YT.PlayerState.PLAYING;
+
+                    if (now - lastSyncTime >= 2000 || Math.abs(currentTime - (videoState?.currentTime || 0)) > 0.5) {
+                        onStateChange({ currentTime, isPlaying, url: currentUrl }, true);
+                        lastSyncTime = now;
+                    }
+                }
+            } else if (videoRef.current) {
                 const currentTime = videoRef.current.currentTime;
                 const now = Date.now();
-                
-                // Only sync if enough time has passed or if playing state changed
-                const timeSinceLastSync = now - lastSyncTime;
                 const isPlaying = !videoRef.current.paused;
-                
-                if (timeSinceLastSync >= 2000 || Math.abs(currentTime - (videoState?.currentTime || 0)) > 0.5) {
-                    onStateChange({
-                        currentTime,
-                        isPlaying,
-                        url: currentUrl
-                    }, true);
+
+                if (now - lastSyncTime >= 2000 || Math.abs(currentTime - (videoState?.currentTime || 0)) > 0.5) {
+                    onStateChange({ currentTime, isPlaying, url: currentUrl }, true);
                     lastSyncTime = now;
                 }
             }
         };
-        
+
         // Use adaptive sync frequency - more frequent when playing, less when paused
         const updateSyncFrequency = () => {
             if (syncInterval) clearInterval(syncInterval);
-            
-            const frequency = videoRef.current && !videoRef.current.paused ? 1500 : 5000;
+
+            const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
+            let isVideoPlaying = false;
+
+            if (isYouTube && ytPlayerRef.current && isYtReadyRef.current) {
+                isVideoPlaying = ytPlayerRef.current.getPlayerState() === (window as any).YT.PlayerState.PLAYING;
+            } else if (videoRef.current) {
+                isVideoPlaying = !videoRef.current.paused;
+            }
+
+            const frequency = isVideoPlaying ? 1500 : 5000;
             syncInterval = setInterval(performSync, frequency);
         };
-        
+
         updateSyncFrequency();
-        
+
         // Listen for play/pause events to adjust sync frequency
         const video = videoRef.current;
         if (video) {
@@ -382,33 +544,34 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             {/* Video Container & Playlist (Main Area) */}
             <div className={styles.mainArea}>
                 <div className={styles.videoContainer}>
-                    {currentUrl ? (
-                        currentUrl.includes("youtube.com/embed") ? (
-                            <iframe
-                                src={currentUrl}
-                                className={styles.video}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                            />
-                        ) : (
-                            <video
-                                ref={videoRef}
-                                src={currentUrl}
-                                className={styles.video}
-                                onTimeUpdate={handleTimeUpdate}
-                                onWaiting={() => {
-                                    if (isHost && onStateChange) {
-                                        onStateChange({ isPlaying: false, currentTime: videoRef.current?.currentTime || 0 }, true);
-                                    }
-                                }}
-                                onPlaying={() => {
-                                    if (isHost && onStateChange) {
-                                        onStateChange({ isPlaying: true, currentTime: videoRef.current?.currentTime || 0 }, true);
-                                    }
-                                }}
-                            />
-                        )
-                    ) : (
+                    {/* Keep both elements in DOM to avoid destroying the YT IFrame on type switch */}
+                    <div
+                        id="yt-player-container"
+                        ref={ytContainerRef}
+                        className={styles.video}
+                        style={{ display: currentUrl && (currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be")) ? 'block' : 'none' }}
+                    />
+
+                    {currentUrl && !currentUrl.includes("youtube") && !currentUrl.includes("youtu.be") && (
+                        <video
+                            ref={videoRef}
+                            src={currentUrl}
+                            className={styles.video}
+                            onTimeUpdate={handleTimeUpdate}
+                            onWaiting={() => {
+                                if (isHost && onStateChange) {
+                                    onStateChange({ isPlaying: false, currentTime: videoRef.current?.currentTime || 0 }, true);
+                                }
+                            }}
+                            onPlaying={() => {
+                                if (isHost && onStateChange) {
+                                    onStateChange({ isPlaying: true, currentTime: videoRef.current?.currentTime || 0 }, true);
+                                }
+                            }}
+                        />
+                    )}
+
+                    {!currentUrl && (
                         <div className={styles.placeholder}>
                             <Play size={48} className={styles.placeholderIcon} />
                             <h3>No video loaded</h3>
@@ -453,7 +616,7 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             </div>
 
             {/* Controls */}
-            {currentUrl && !currentUrl.includes("youtube.com/embed") && (
+            {currentUrl && (
                 <div className={styles.controls}>
                     <div className={styles.controlsRow}>
                         <button className={styles.controlButton} onClick={handlePlayPrevious}>
@@ -507,6 +670,20 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                         "👁️ Viewer - Local controls only (Host controls room sync)"
                     }
                 </span>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                        console.log("[VideoPlayer] Manual Player Reset Triggered");
+                        ytPlayerRef.current = null;
+                        isYtReadyRef.current = false;
+                        setYtApiLoaded(false);
+                        setTimeout(() => setYtApiLoaded(true), 100);
+                    }}
+                    className="text-xs text-white/40 hover:text-white"
+                >
+                    Reset Player
+                </Button>
             </div>
         </div>
     );

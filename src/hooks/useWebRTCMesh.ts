@@ -135,7 +135,23 @@ export const useWebRTCMesh = ({ socket, roomCode, currentUser, participants, onP
 
     // Mesh networking logic: connecting to new participants
     useEffect(() => {
-        if (!socket || !currentUser) return;
+        if (!socket) {
+            if (peersRef.current.length > 0) {
+                console.log("WebRTC: Socket lost, destroying all peers");
+                peersRef.current.forEach(p => {
+                    try {
+                        p.peer.destroy();
+                    } catch (e) {
+                        console.error("Error destroying peer on socket loss:", e);
+                    }
+                });
+                setPeers([]);
+                setRemoteStreams([]);
+            }
+            return;
+        }
+
+        if (!currentUser) return;
 
         const currentPeers = peersRef.current;
 
@@ -203,6 +219,20 @@ export const useWebRTCMesh = ({ socket, roomCode, currentUser, participants, onP
         });
 
     }, [participants, currentUser, createPeer, socket]);
+
+    // Cleanup everything on unmount
+    useEffect(() => {
+        return () => {
+            console.log("WebRTC: Cleaning up all peers on unmount");
+            peersRef.current.forEach(p => {
+                try {
+                    p.peer.destroy();
+                } catch (e) {
+                    console.error("WebRTC: Error during unmount cleanup", e);
+                }
+            });
+        };
+    }, []);
 
 
 

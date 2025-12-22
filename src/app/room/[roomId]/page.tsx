@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUser, useClerk } from "@clerk/nextjs";
 import Link from "next/link";
@@ -102,10 +102,33 @@ export default function RoomPage() {
         timestamp: 0
     });
 
-    const isHost = Boolean(roomConfig?.isHost || roomConfig?.hostEmail === user?.primaryEmailAddress?.emailAddress ||
-        (roomConfig?.hostEmail && (user?.fullName === roomConfig.hostEmail || user?.primaryEmailAddress?.emailAddress?.split('@')[0] === roomConfig.hostEmail)));
+    const isHost = Boolean(roomConfig?.isHost || (roomConfig?.hostEmail && user?.primaryEmailAddress?.emailAddress === roomConfig.hostEmail));
     const isCoHost = roomConfig?.coHosts?.includes(user?.primaryEmailAddress?.emailAddress || '') || false;
     const isHostOrCoHost = isHost || isCoHost;
+
+    // Helper function to format departure messages
+    const getDepartureMessage = (username: string, departureType: string, sessionDuration?: number): string => {
+        const durationStr = sessionDuration
+            ? ` (was here for ${Math.floor(sessionDuration / 60)}min ${sessionDuration % 60}s)`
+            : '';
+
+        switch (departureType) {
+            case 'disconnect':
+                return `${username} disconnected${durationStr}`;
+            case 'kicked':
+                return `${username} was kicked from the room`;
+            case 'banned':
+                return `${username} was banned from the room`;
+            case 'left':
+                return `${username} left the room${durationStr}`;
+            case 'timeout':
+                return `${username} timed out${durationStr}`;
+            case 'websocket_error':
+                return `${username} lost connection`;
+            default:
+                return `${username} left the room`;
+        }
+    };
 
     const wsRef = useRef<WebSocket | null>(null);
     const fetchRoomDetailsRef = useRef<(() => Promise<Room | null>) | undefined>(undefined);
@@ -166,9 +189,17 @@ export default function RoomPage() {
             }
 
             if (!isCurrentUserHost && room.lobby_enabled) {
-                // If lobby is enabled and we're not the host, we might be unadmitted
-                // WebSocket will tell us, but we'll assume we're waiting until confirmed
-                setIsAdmitted(false);
+                // If lobby is enabled and we're not the host, check our status
+                // We default to false (waiting) only if status is not explicitly 'admitted'
+                if (room.current_user_status === 'admitted') {
+                    setIsAdmitted(true);
+                } else if (room.current_user_status === 'denied') {
+                    alert("You have been denied access to this room.");
+                    router.push("/dashboard");
+                    return null;
+                } else {
+                    setIsAdmitted(false);
+                }
             }
 
             // Sync video state if needed (and we are not host)
@@ -177,15 +208,7 @@ export default function RoomPage() {
             }
 
             if (!isCurrentUserHost) {
-                // Request video state with a short delay to ensure WebSocket is ready
-                setTimeout(() => {
-                    if (wsRef.current?.readyState === WebSocket.OPEN && !videoStateRef.current.url) {
-                        wsRef.current.send(JSON.stringify({
-                            type: "request_video_state",
-                            requesting_user: user?.fullName || 'Guest'
-                        }));
-                    }
-                }, 500); // Increased delay slightly for reliability
+
 
                 // Final fallback after 3 seconds if no video is loaded
                 setTimeout(() => {
@@ -463,25 +486,52 @@ export default function RoomPage() {
         roomConfigRef.current = roomConfig;
     }, [roomConfig]);
 
+    const lastWsUrlRef = useRef<string | null>(null);
+
     // WebSocket Logic
     useEffect(() => {
-        if (!user?.primaryEmailAddress?.emailAddress) return;
+        if (!user?.id || !roomId) return;
 
         const connectWebSocket = () => {
+            if (!isLoaded || !user) {
+                console.log("[Frontend Debug] connectWebSocket skipped: User not loaded yet.");
+                return;
+            }
+
             const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
-            const userName = user?.fullName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Guest';
+            // Use email as the primary identifier if available, otherwise fallback to full name or Guest
+            const userName = user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Guest';
             const safeNickname = encodeURIComponent(userName);
             const userImage = encodeURIComponent(user?.imageUrl || "");
+            const connectionId = Math.random().toString(36).substring(7);
+            const fullUrl = `${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}&cid=${connectionId}`;
 
-            console.log(`[Frontend Debug] Room ID from URL: '${roomId}'`);
-            console.log(`[Frontend Debug] User Name: '${userName}'`);
-            console.log(`[Frontend Debug] WebSocket URL: ${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
+            console.log(`[Frontend Debug] connectWebSocket called. user=${user?.primaryEmailAddress?.emailAddress}, roomId=${roomId}`);
 
-            const ws = new WebSocket(`${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}`);
+            // Prevent redundant connections if URL hasn't changed
+            const existingWs = wsRef.current;
+            if (lastWsUrlRef.current === fullUrl && existingWs && existingWs.readyState < 2) {
+                return;
+            }
+
+            // If there's an existing connection that's different, close it first
+            if (existingWs && existingWs.readyState < 2) {
+                existingWs.close(1000, "New connection starting");
+            }
+
+            lastWsUrlRef.current = fullUrl;
+            console.log(`[Frontend Debug] Connecting to WebSocket: ${fullUrl}`);
+
+            const ws = new WebSocket(fullUrl);
             wsRef.current = ws;
 
             ws.onopen = () => {
-                console.log(`[Frontend Debug] Connected to Room WebSocket for room: ${roomId}`);
+                if (wsRef.current !== ws) {
+                    console.log(`[Frontend Debug] Old WebSocket connection ID ${connectionId} opened, closing because newer one exists.`);
+                    ws.close(1000, "Superseded");
+                    return;
+                }
+                console.log(`[Frontend Debug] Connected to Room WebSocket for room: ${roomId} (ID: ${connectionId})`);
                 setIsConnected(true);
 
                 ws.send(JSON.stringify({
@@ -533,7 +583,8 @@ export default function RoomPage() {
                             return {
                                 name: u.name || u.username,
                                 imageUrl: u.imageUrl,
-                                isHost: u.isHost
+                                isHost: u.isHost,
+                                role: u.role
                             };
                         });
                         setParticipants(usersList);
@@ -654,7 +705,7 @@ export default function RoomPage() {
                             // Request state now that we are admitted
                             wsRef.current?.send(JSON.stringify({
                                 type: "request_video_state",
-                                requesting_user: user?.fullName || 'Guest'
+                                requesting_user: user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Guest'
                             }));
                         } else if (data.status === "denied") {
                             alert("Your request to join this room was denied.");
@@ -667,6 +718,32 @@ export default function RoomPage() {
                                 setLobbyCount(users.length);
                             }).catch(err => console.error("Lobby update fetch error:", err));
                         }
+                    } else if (data.type === "user_departed") {
+                        // Handle user departure notification
+                        console.log(`[Departure] ${data.username} left: ${data.departure_type} - ${data.departure_reason}`);
+
+                        // Add a system message about the departure
+                        const departureMessage = getDepartureMessage(data.username, data.departure_type, data.session_duration_seconds);
+                        setMessages(prev => {
+                            // Check for duplicate
+                            const isDuplicate = prev.some(m =>
+                                m.user === "System" &&
+                                m.text === departureMessage &&
+                                Math.abs(m.timestamp.getTime() - Date.now()) < 2000
+                            );
+                            if (isDuplicate) return prev;
+
+                            return [...prev, {
+                                id: `departure-${data.username}-${Date.now()}`,
+                                user: "System",
+                                text: departureMessage,
+                                timestamp: new Date(data.departed_at || Date.now())
+                            }];
+                        });
+
+                        // Remove the user from participants list
+                        setParticipants(prev => prev.filter(p => p.name !== data.username));
+                        setOnlineCount(prev => Math.max(0, prev - 1));
                     }
                 } catch (e) {
                     console.warn("WebSocket Parse Error", e);
@@ -674,14 +751,24 @@ export default function RoomPage() {
             };
 
             ws.onclose = (event) => {
-                console.log("WebSocket closed", event.code, event.reason);
-                setIsConnected(false);
-                // Only attempt to reconnect if not intentionally leaving the room
-                if (!event.wasClean && !isLeavingRoomRef.current) {
-                    setTimeout(() => {
-                        console.log("Attempting to reconnect...");
-                        connectWebSocket();
-                    }, 3000);
+                console.log(`[Frontend Debug] WebSocket closed (ID: ${connectionId})`, event.code, event.reason);
+
+                // Only handle this close event if it's coming from our "current" socket
+                if (wsRef.current === ws) {
+                    setIsConnected(false);
+                    wsRef.current = null;
+                    // Only attempt to reconnect if not intentionally leaving the room
+                    if (!event.wasClean && !isLeavingRoomRef.current) {
+                        setTimeout(() => {
+                            // Re-check current state before reconnecting
+                            if (wsRef.current === null && !isLeavingRoomRef.current) {
+                                console.log("[Frontend Debug] Attempting to reconnect...");
+                                connectWebSocket();
+                            }
+                        }, 3000);
+                    }
+                } else {
+                    console.log(`[Frontend Debug] Ignoring onclose for superseded socket ID: ${connectionId}`);
                 }
             };
 
@@ -696,11 +783,14 @@ export default function RoomPage() {
         connectWebSocket();
 
         return () => {
-            if (wsRef.current && wsRef.current.readyState < 2) { // 2 = CLOSING
-                wsRef.current.close(1000, "Component unmounting");
+            console.log("[Frontend Debug] Cleaning up WebSocket effect. User ID or Room ID changed.");
+            if (wsRef.current) {
+                wsRef.current.close(1000, "Cleanup");
+                wsRef.current = null;
             }
+            setIsConnected(false);
         };
-    }, [roomId, user?.id]); // Use user.id for stability
+    }, [isLoaded, user?.id, roomId]); // Use stable values instead of params object
 
 
     // We need a workaround for the circular dependency.
@@ -733,11 +823,13 @@ export default function RoomPage() {
     }, []);
 
     // Initialize WebRTC Mesh
+    const participantNames = useMemo(() => participants.map(p => p.name), [participants]);
+
     const { handleSignal, broadcastData, onData, remoteStreams } = useWebRTCMesh({
         socket: isConnected ? wsRef.current : null,
         roomCode: roomId,
         currentUser: user?.fullName || "Guest",
-        participants: participants.map(p => p.name),
+        participants: participantNames,
         localStream,
         onPeerConnected: onPeerConnectAction
     });
@@ -1023,6 +1115,7 @@ export default function RoomPage() {
 
         if (wsRef.current) {
             wsRef.current.close();
+            wsRef.current = null;
         }
         router.push("/dashboard");
     };

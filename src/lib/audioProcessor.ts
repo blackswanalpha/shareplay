@@ -35,13 +35,13 @@ export class AudioProcessor {
     private outputGainNode: GainNode | null = null;
     private destinationNode: MediaStreamAudioDestinationNode | null = null;
     private analyserNode: AnalyserNode | null = null;
-    
+
     // Noise gate parameters
     private noiseThreshold = -50; // dB
     private gateRatio = 10;
     private attackTime = 0.003; // 3ms
     private releaseTime = 0.1; // 100ms
-    
+
     // Filter frequencies
     private highPassFreq = 85; // Hz - removes low frequency rumble
     private lowPassFreq = 8000; // Hz - removes high frequency noise
@@ -51,8 +51,12 @@ export class AudioProcessor {
     }
 
     private initializeAudioContext() {
+        if (typeof window === 'undefined') return; // Guard for SSR
         try {
-            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioContextClass) return;
+
+            this.audioContext = new AudioContextClass({
                 sampleRate: 48000,
                 latencyHint: 'interactive'
             });
@@ -104,23 +108,23 @@ export class AudioProcessor {
 
             // Create audio processing chain
             this.sourceNode = this.audioContext.createMediaStreamSource(inputStream);
-            
+
             // Input gain control
             this.gainNode = this.audioContext.createGain();
             this.gainNode.gain.value = 1.2; // Slight boost
-            
+
             // High-pass filter (removes low frequency noise/rumble)
             this.highPassFilter = this.audioContext.createBiquadFilter();
             this.highPassFilter.type = 'highpass';
             this.highPassFilter.frequency.value = this.highPassFreq;
             this.highPassFilter.Q.value = 0.7;
-            
+
             // Low-pass filter (removes high frequency noise)
             this.lowPassFilter = this.audioContext.createBiquadFilter();
             this.lowPassFilter.type = 'lowpass';
             this.lowPassFilter.frequency.value = this.lowPassFreq;
             this.lowPassFilter.Q.value = 0.7;
-            
+
             // Noise gate (dynamic compression to reduce background noise)
             this.noiseGateNode = this.audioContext.createDynamicsCompressor();
             this.noiseGateNode.threshold.value = this.noiseThreshold;
@@ -128,18 +132,18 @@ export class AudioProcessor {
             this.noiseGateNode.attack.value = this.attackTime;
             this.noiseGateNode.release.value = this.releaseTime;
             this.noiseGateNode.knee.value = 5;
-            
+
             // Output gain for final level adjustment
             this.outputGainNode = this.audioContext.createGain();
             this.outputGainNode.gain.value = 0.9;
-            
+
             // Analyser for monitoring (optional)
             this.analyserNode = this.audioContext.createAnalyser();
             this.analyserNode.fftSize = 2048;
-            
+
             // Create destination stream
             this.destinationNode = this.audioContext.createMediaStreamDestination();
-            
+
             // Connect the audio processing chain
             this.sourceNode
                 .connect(this.gainNode)
@@ -149,10 +153,10 @@ export class AudioProcessor {
                 .connect(this.outputGainNode)
                 .connect(this.analyserNode)
                 .connect(this.destinationNode);
-            
+
             console.log('Audio processing chain initialized successfully');
             return this.destinationNode.stream;
-            
+
         } catch (error) {
             console.error('Failed to process audio stream:', error);
             return inputStream; // Return original stream on error
@@ -164,10 +168,10 @@ export class AudioProcessor {
      */
     public getAudioLevel(): number {
         if (!this.analyserNode) return 0;
-        
+
         const dataArray = new Uint8Array(this.analyserNode.frequencyBinCount);
         this.analyserNode.getByteFrequencyData(dataArray);
-        
+
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
             sum += dataArray[i];
@@ -191,7 +195,7 @@ export class AudioProcessor {
     public setFilterFrequencies(highPass: number, lowPass: number) {
         this.highPassFreq = Math.max(20, Math.min(1000, highPass));
         this.lowPassFreq = Math.max(2000, Math.min(20000, lowPass));
-        
+
         if (this.highPassFilter) {
             this.highPassFilter.frequency.value = this.highPassFreq;
         }
@@ -218,7 +222,7 @@ export class AudioProcessor {
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 try {
                     // Don't await - let it close asynchronously
-                    this.audioContext.close().catch(e => 
+                    this.audioContext.close().catch(e =>
                         console.warn('Error closing audio context:', e)
                     );
                 } catch (e) {
@@ -228,7 +232,7 @@ export class AudioProcessor {
         } catch (error) {
             console.error('Error during audio cleanup:', error);
         }
-        
+
         // Reset all references
         this.audioContext = null;
         this.sourceNode = null;
@@ -245,10 +249,11 @@ export class AudioProcessor {
      * Check if browser supports advanced audio processing
      */
     public static isAdvancedProcessingSupported(): boolean {
+        if (typeof window === 'undefined') return false;
         try {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             if (!AudioContext) return false;
-            
+
             const tempContext = new AudioContext();
             const hasRequiredNodes = !!(
                 typeof tempContext.createGain === 'function' &&
@@ -256,7 +261,7 @@ export class AudioProcessor {
                 typeof tempContext.createDynamicsCompressor === 'function' &&
                 typeof tempContext.createMediaStreamDestination === 'function'
             );
-            
+
             tempContext.close();
             return hasRequiredNodes;
         } catch {
@@ -269,7 +274,7 @@ export class AudioProcessor {
      */
     private async setupSpectralSubtraction() {
         if (!this.audioContext || !this.analyserNode) return;
-        
+
         // This would require a more complex implementation with ScriptProcessorNode
         // or AudioWorklet for real-time spectral analysis and noise subtraction
         // For now, we rely on the browser's built-in noise suppression and our filter chain
@@ -291,11 +296,11 @@ export async function createEnhancedAudioStream(processor: AudioProcessor): Prom
     try {
         // Get user media with enhanced constraints
         const constraints = processor.getEnhancedConstraints();
-        const rawStream = await navigator.mediaDevices.getUserMedia({ 
+        const rawStream = await navigator.mediaDevices.getUserMedia({
             audio: constraints,
-            video: false 
+            video: false
         });
-        
+
         // Process the stream if advanced processing is supported
         if (AudioProcessor.isAdvancedProcessingSupported()) {
             console.log('Applying advanced audio processing...');
@@ -304,7 +309,7 @@ export async function createEnhancedAudioStream(processor: AudioProcessor): Prom
             console.log('Using basic audio processing (browser built-in)');
             return rawStream;
         }
-        
+
     } catch (error) {
         console.error('Failed to create enhanced audio stream:', error);
         return null;
