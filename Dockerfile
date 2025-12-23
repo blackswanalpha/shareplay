@@ -22,7 +22,8 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY ./.env .
+# Environment variables will be handled at runtime
+# Next.js will use NEXT_PUBLIC_* env vars from the environment
 
 RUN npm run build
 
