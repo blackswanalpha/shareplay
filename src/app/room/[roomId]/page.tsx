@@ -294,10 +294,35 @@ export default function RoomPage() {
             let room;
             try {
                 room = await fetchRoomDetails();
+                
+                // CRITICAL: Validate room exists before proceeding
+                if (!room) {
+                    console.error("Room fetch returned null/undefined - room may not exist");
+                    alert("This room no longer exists or was not found.");
+                    router.push("/dashboard");
+                    return;
+                }
+                
+                // Validate room has required properties
+                if (!room.id || !room.code) {
+                    console.error("Room missing required properties:", room);
+                    alert("Invalid room data received. Please try again.");
+                    router.push("/dashboard");
+                    return;
+                }
+                
+                console.log(`Successfully validated room ${room.code} (ID: ${room.id})`);
+                
             } catch (error: any) {
                 console.error("Failed to fetch room details:", error);
                 if (error.message?.includes("Room") && error.message?.includes("not found")) {
                     alert("This room no longer exists or has been deleted.");
+                    router.push("/dashboard");
+                    return;
+                }
+                // Handle other specific errors
+                if (error.message?.includes("403") || error.message?.includes("Access denied")) {
+                    alert("You don't have permission to access this room.");
                     router.push("/dashboard");
                     return;
                 }
@@ -509,14 +534,17 @@ export default function RoomPage() {
             const userName = currentUserIdentifier;
             const safeNickname = encodeURIComponent(userName);
             const userImage = encodeURIComponent(user?.imageUrl || "");
-            const connectionId = Math.random().toString(36).substring(7);
-            const fullUrl = `${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}&cid=${connectionId}`;
+            // Use deterministic connection ID based on user and room for better deduplication
+            const connectionId = `${user?.id || 'guest'}-${roomId}-${Date.now()}`;
+            const baseUrl = `${wsUrl}/ws/chat/${roomId}/${safeNickname}?imageUrl=${userImage}`;
+            const fullUrl = `${baseUrl}&cid=${connectionId}`;
 
             console.log(`[Frontend Debug] connectWebSocket called. user=${user?.primaryEmailAddress?.emailAddress}, roomId=${roomId}`);
 
-            // Prevent redundant connections if URL hasn't changed
+            // Enhanced connection deduplication - check base URL and user combination
             const existingWs = wsRef.current;
-            if (lastWsUrlRef.current === fullUrl && existingWs && existingWs.readyState < 2) {
+            if (existingWs && existingWs.readyState < 2 && lastWsUrlRef.current?.startsWith(baseUrl)) {
+                console.log(`[Frontend Debug] Existing WebSocket found for same user/room, skipping connection`);
                 return;
             }
 

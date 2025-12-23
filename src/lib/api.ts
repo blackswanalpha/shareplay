@@ -50,67 +50,103 @@ export interface CreateRoomData {
     lobby_enabled: boolean;
 }
 
+// Cache to prevent parallel registration attempts for same user
+const registrationCache = new Map<string, Promise<string>>();
+
 // Helper to get access token using the user's session email
 async function getAccessToken(userEmail: string, fullName?: string | null) {
-    try {
-        // Try to authenticate with the session user's email first
-        let res = await fetch(`${API_URL}/auth/token`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({
-                username: userEmail,
-                password: "user123", // In a real app, this would be handled differently
-            }),
-        });
+    // Check if there's already a registration in progress for this user
+    if (registrationCache.has(userEmail)) {
+        console.log(`Registration already in progress for ${userEmail}, waiting...`);
+        return await registrationCache.get(userEmail)!;
+    }
 
-        // If auth fails (likely user doesn't exist), try to register them
-        if (res.status === 401) {
-            console.log(`Auth failed for ${userEmail}, attempting registration...`);
-            const registerRes = await fetch(`${API_URL}/users/`, {
+    const registrationPromise = (async () => {
+        try {
+            // Try to authenticate with the session user's email first
+            let res = await fetch(`${API_URL}/auth/token`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    email: userEmail,
-                    password: "user123",
-                    full_name: fullName || userEmail.split('@')[0]
-                })
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    username: userEmail,
+                    password: "user123", // In a real app, this would be handled differently
+                }),
             });
 
-            if (registerRes.ok) {
-                console.log(`Registered user ${userEmail}, retrying auth...`);
-                // Retry auth after successful registration
-                res = await fetch(`${API_URL}/auth/token`, {
+            // If auth fails (likely user doesn't exist), try to register them
+            if (res.status === 401) {
+                console.log(`Auth failed for ${userEmail}, attempting registration...`);
+                const registerRes = await fetch(`${API_URL}/users/`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({
-                        username: userEmail,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email: userEmail,
                         password: "user123",
-                    }),
+                        full_name: fullName || userEmail.split('@')[0]
+                    })
                 });
-            } else {
-                console.warn(`Registration failed for ${userEmail}`);
+
+                if (registerRes.ok) {
+                    console.log(`Registered user ${userEmail}, retrying auth...`);
+                    // Retry auth after successful registration
+                    res = await fetch(`${API_URL}/auth/token`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({
+                            username: userEmail,
+                            password: "user123",
+                        }),
+                    });
+                } else if (registerRes.status === 400) {
+                    // User might already exist due to race condition, try auth again
+                    console.log(`Registration failed (user might exist), retrying auth for ${userEmail}...`);
+                    res = await fetch(`${API_URL}/auth/token`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({
+                            username: userEmail,
+                            password: "user123",
+                        }),
+                    });
+                } else {
+                    console.warn(`Registration failed for ${userEmail}`);
+                }
             }
-        }
 
 
 
-        if (!res.ok) {
-            const errorText = await res.text().catch(() => 'Unknown error');
-            console.error(`Auth failed for ${userEmail}: ${res.status} ${errorText}`);
-            throw new Error(`Authentication failed for ${userEmail}: ${res.status} - ${errorText}`);
+            if (!res.ok) {
+                const errorText = await res.text().catch(() => 'Unknown error');
+                console.error(`Auth failed for ${userEmail}: ${res.status} ${errorText}`);
+                throw new Error(`Authentication failed for ${userEmail}: ${res.status} - ${errorText}`);
+            }
+            
+            const data = await res.json();
+            
+            if (!data.access_token) {
+                console.error('No access_token in response:', data);
+                throw new Error('Authentication response missing access_token');
+            }
+            
+            console.log(`Successfully authenticated ${userEmail}`);
+            return data.access_token;
+        } catch (error) {
+            console.error("Auth error", error);
+            throw error;
+        } finally {
+            // Clear cache entry after completion (success or failure)
+            registrationCache.delete(userEmail);
         }
-        
-        const data = await res.json();
-        
-        if (!data.access_token) {
-            console.error('No access_token in response:', data);
-            throw new Error('Authentication response missing access_token');
-        }
-        
-        console.log(`Successfully authenticated ${userEmail}`);
-        return data.access_token;
+    })();
+
+    // Store the promise in cache to prevent parallel requests
+    registrationCache.set(userEmail, registrationPromise);
+    
+    try {
+        return await registrationPromise;
     } catch (error) {
-        console.error("Auth error", error);
+        // If this attempt failed, ensure cache is cleared for retry
+        registrationCache.delete(userEmail);
         throw error;
     }
 }
@@ -141,7 +177,7 @@ export const api = {
     },
 
     async getRoom(code: string, userEmail?: string): Promise<Room> {
-        let headers: Record<string, string> = {};
+        const headers: Record<string, string> = {};
         if (userEmail) {
             try {
                 const token = await getAccessToken(userEmail);
