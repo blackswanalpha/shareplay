@@ -24,10 +24,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Add required environment variables for build time
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3VwZXJiLWh1c2t5LTEwLmNsZXJrLmFjY291bnRzLmRldiQ
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_WS_URL=ws://localhost:8000
+ENV NEXT_PUBLIC_API_URL=https://shareplay.spinwish.tech
+ENV NEXT_PUBLIC_WS_URL=wss://shareplay.spinwish.tech
 ENV AUTH_SECRET=KZNHm8tJIY112+oGMaZPpccmsJ420KGSsZxApG6ZONM=
 ENV CLERK_SECRET_KEY=sk_test_w8mS3rquLYYP3OGai3MqNHnMmqKKySTL9Ed3VXl2bz
+
+# Create .env file for Next.js to read
+RUN echo "AUTH_SECRET=${AUTH_SECRET}" > .env && \
+    echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}" >> .env && \
+    echo "NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}" >> .env && \
+    echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" >> .env && \
+    echo "CLERK_SECRET_KEY=${CLERK_SECRET_KEY}" >> .env
 
 RUN npm run build
 
@@ -45,6 +52,9 @@ ENV CLERK_SECRET_KEY=sk_test_w8mS3rquLYYP3OGai3MqNHnMmqKKySTL9Ed3VXl2bz
 ENV NEXT_PUBLIC_API_URL=https://shareplay.spinwish.tech
 ENV NEXT_PUBLIC_WS_URL=wss://shareplay.spinwish.tech
 ENV AUTH_SECRET=KZNHm8tJIY112+oGMaZPpccmsJ420KGSsZxApG6ZONM=
+
+# Copy .env file from builder stage
+COPY --from=builder /app/.env ./
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
