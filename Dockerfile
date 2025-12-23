@@ -42,8 +42,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Add runtime environment variables for Clerk and API
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3VwZXJiLWh1c2t5LTEwLmNsZXJrLmFjY291bnRzLmRldiQ
 ENV CLERK_SECRET_KEY=sk_test_w8mS3rquLYYP3OGai3MqNHnMmqKKySTL9Ed3VXl2bz
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_WS_URL=ws://localhost:8000
+ENV NEXT_PUBLIC_API_URL=https://shareplay.spinwish.tech
+ENV NEXT_PUBLIC_WS_URL=wss://shareplay.spinwish.tech
 ENV AUTH_SECRET=KZNHm8tJIY112+oGMaZPpccmsJ420KGSsZxApG6ZONM=
 
 RUN addgroup --system --gid 1001 nodejs
