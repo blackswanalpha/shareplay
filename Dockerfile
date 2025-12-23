@@ -22,8 +22,12 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Environment variables will be handled at runtime
-# Next.js will use NEXT_PUBLIC_* env vars from the environment
+# Add required environment variables for build time
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3VwZXJiLWh1c2t5LTEwLmNsZXJrLmFjY291bnRzLmRldiQ
+ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_WS_URL=ws://localhost:8000
+ENV AUTH_SECRET=KZNHm8tJIY112+oGMaZPpccmsJ420KGSsZxApG6ZONM=
+ENV CLERK_SECRET_KEY=sk_test_w8mS3rquLYYP3OGai3MqNHnMmqKKySTL9Ed3VXl2bz
 
 RUN npm run build
 
