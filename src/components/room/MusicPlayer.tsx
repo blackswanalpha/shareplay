@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Volume2, Plus, Music, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { withErrorBoundary } from "@/components/ui";
 import styles from "./MusicPlayer.module.css";
 
 interface Track {
@@ -37,7 +38,7 @@ const mockPlaylist: Track[] = [
     { id: "5", title: "Kiss Me More", artist: "Doja Cat", duration: "3:28", url: "https://example.com/track5.mp3" },
 ];
 
-export default function MusicPlayer({ isHost = false, musicState, onStateChange }: MusicPlayerProps) {
+function MusicPlayer({ isHost = false, musicState, onStateChange }: MusicPlayerProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isShuffle, setIsShuffle] = useState(false);
     const [isRepeat, setIsRepeat] = useState(false);
@@ -323,3 +324,10 @@ export default function MusicPlayer({ isHost = false, musicState, onStateChange 
         </div>
     );
 }
+
+export default withErrorBoundary(MusicPlayer, {
+    componentName: "MusicPlayer",
+    onError: (error, errorInfo) => {
+        console.error("MusicPlayer Error:", error, errorInfo);
+    },
+});

@@ -74,8 +74,8 @@ Edit `.env.local` in the project root:
 AUTH_SECRET="your-generated-secret-here"
 
 # From Google Cloud Console
-AUTH_GOOGLE_ID="123456789-abc123.apps.googleusercontent.com"
-AUTH_GOOGLE_SECRET="GOCSPX-xxxxxxxxxxxxx"
+AUTH_GOOGLE_ID="your-client-id.apps.googleusercontent.com"
+AUTH_GOOGLE_SECRET="your-client-secret-from-google-console"
 ```
 
 ### Step 7: Restart the Dev Server

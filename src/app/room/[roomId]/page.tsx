@@ -140,6 +140,7 @@ export default function RoomPage() {
     const fetchRoomDetailsRef = useRef<(() => Promise<Room | null>) | undefined>(undefined);
     const isLeavingRoomRef = useRef(false);
     const initializedRoomIdRef = useRef<string | null>(null);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Extract fetchRoomDetails to be reusable
     const fetchRoomDetails = useCallback(async (): Promise<Room | null> => {
@@ -792,8 +793,9 @@ export default function RoomPage() {
                     setIsConnected(false);
                     wsRef.current = null;
                     // Only attempt to reconnect if not intentionally leaving the room
-                    if (!event.wasClean && !isLeavingRoomRef.current) {
-                        setTimeout(() => {
+                    if (!event.wasClean && !isLeavingRoomRef.current && !reconnectTimeoutRef.current) {
+                        reconnectTimeoutRef.current = setTimeout(() => {
+                            reconnectTimeoutRef.current = null;
                             // Re-check current state before reconnecting
                             if (wsRef.current === null && !isLeavingRoomRef.current) {
                                 console.log("[Frontend Debug] Attempting to reconnect...");
@@ -808,9 +810,38 @@ export default function RoomPage() {
 
             ws.onerror = (error) => {
                 console.error("WebSocket error:", error);
-                console.error("WebSocket URL:", `${wsUrl}/ws/chat/${roomId}/${safeNickname}`);
+                console.error("WebSocket URL:", fullUrl);
                 console.error("WebSocket readyState:", ws.readyState);
+                console.error("WebSocket readyState meanings:", {
+                    0: "CONNECTING",
+                    1: "OPEN", 
+                    2: "CLOSING",
+                    3: "CLOSED"
+                });
+                console.error("Connection ID:", connectionId);
+                console.error("Room ID:", roomId);
+                console.error("User:", userName);
                 setIsConnected(false);
+                
+                // Store error information for debugging
+                const errorInfo = {
+                    timestamp: new Date().toISOString(),
+                    url: fullUrl,
+                    readyState: ws.readyState,
+                    connectionId,
+                    roomId,
+                    userName,
+                    error: error.toString(),
+                    userAgent: navigator.userAgent,
+                };
+                
+                try {
+                    const existingErrors = JSON.parse(localStorage.getItem('shareplay_ws_errors') || '[]');
+                    existingErrors.push(errorInfo);
+                    localStorage.setItem('shareplay_ws_errors', JSON.stringify(existingErrors.slice(-20))); // Keep last 20
+                } catch (e) {
+                    console.warn('Failed to store WebSocket error:', e);
+                }
             };
         };
 
@@ -821,6 +852,10 @@ export default function RoomPage() {
             if (wsRef.current) {
                 wsRef.current.close(1000, "Cleanup");
                 wsRef.current = null;
+            }
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
             }
             setIsConnected(false);
         };
@@ -1242,6 +1277,13 @@ export default function RoomPage() {
             if (wsRef.current) {
                 wsRef.current.close();
             }
+            // Clean up pending sync timeouts
+            Object.values(pendingSyncTimeoutRef.current).forEach(timeout => {
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+            });
+            pendingSyncTimeoutRef.current = {};
             // Clean up audio processor
             audioProcessor.cleanup();
             if (localStream) {

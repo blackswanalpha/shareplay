@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize, Link as LinkIcon, Plus, Trash2, List, SkipForward, SkipBack, Shuffle, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { withErrorBoundary } from "@/components/ui";
 import styles from "./VideoPlayer.module.css";
 
 export interface PlaylistItem {
@@ -36,19 +37,23 @@ interface VideoPlayerProps {
     onPlaylistToggle?: (isOpen: boolean) => void;
 }
 
-export default function VideoPlayer({ isHost = false, videoState, playlistState, onStateChange, onPlaylistChange, onPlaylistToggle }: VideoPlayerProps) {
+function VideoPlayer({ isHost = false, videoState, playlistState, onStateChange, onPlaylistChange, onPlaylistToggle }: VideoPlayerProps) {
     const [localInputUrl, setLocalInputUrl] = useState("");
     const [showPlaylist, setShowPlaylist] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const ytPlayerRef = useRef<any>(null);
     const ytContainerRef = useRef<HTMLDivElement>(null);
     const isYtReadyRef = useRef(false);
+    const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const [ytApiLoaded, setYtApiLoaded] = useState<boolean | null>(null);
+    const [userInteracted, setUserInteracted] = useState(false);
+    const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
     // Enhanced YouTube API loading with better error handling and fallbacks
     useEffect(() => {
         let isMounted = true;
         let pollInterval: NodeJS.Timeout | null = null;
+        let loadTimeout: NodeJS.Timeout | null = null;
 
         const checkYTApi = () => {
             if ((window as any).YT && (window as any).YT.Player) {
@@ -63,6 +68,18 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
         console.log("[VideoPlayer] Initializing YouTube API loading...");
 
+        // Set overall timeout for YouTube API loading (60 seconds)
+        loadTimeout = setTimeout(() => {
+            if (isMounted && ytApiLoaded === null) {
+                console.warn("[VideoPlayer] YouTube API loading timeout - giving up after 60s");
+                setYtApiLoaded(false);
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            }
+        }, 60000);
+
         // Set up global callback before loading script
         (window as any).onYouTubeIframeAPIReady = () => {
             console.log("[VideoPlayer] YouTube API ready via global callback");
@@ -73,13 +90,13 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             }
         };
 
-        // Enhanced script injection with better error handling
-        const loadYouTubeAPI = async (attempt = 1, maxAttempts = 3) => {
+        // Enhanced script injection with better error handling and alternative CDNs
+        const loadYouTubeAPI = async (attempt = 1, maxAttempts = 5) => {
             if (!isMounted) return;
 
             try {
                 // Check if script already exists
-                const existingScript = document.querySelector('script[src*="youtube.com/iframe_api"]');
+                const existingScript = document.querySelector('script[src*="youtube.com/iframe_api"], script[src*="googleapis.com"]');
                 if (existingScript) {
                     if (attempt === 1) {
                         console.log("[VideoPlayer] YouTube API script already exists, waiting for load...");
@@ -94,32 +111,103 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 }
 
                 console.log(`[VideoPlayer] Loading YouTube API (attempt ${attempt}/${maxAttempts})`);
-                
+
+                // Use different CDN sources for better reliability
+                const apiUrls = [
+                    "https://www.youtube.com/iframe_api",
+                    "https://www.googleapis.com/js/api.js", // Alternative Google API
+                ];
+
+                const apiUrl = apiUrls[Math.min(attempt - 1, apiUrls.length - 1)];
+                console.log(`[VideoPlayer] Trying API URL: ${apiUrl}`);
+
                 const script = document.createElement('script');
-                script.src = "https://www.youtube.com/iframe_api";
+                script.src = apiUrl;
                 script.async = true;
-                
-                // Add comprehensive error handling
-                script.onerror = (error) => {
+                script.defer = true;
+
+                // Add timeout for individual script loads
+                let scriptTimeout: NodeJS.Timeout | null = null;
+                const scriptLoadPromise = new Promise<void>((resolve, reject) => {
+                    scriptTimeout = setTimeout(() => {
+                        reject(new Error(`Script load timeout after 15 seconds`));
+                    }, 15000);
+
+                    script.onload = () => {
+                        if (scriptTimeout) clearTimeout(scriptTimeout);
+                        resolve();
+                    };
+
+                    script.onerror = (error) => {
+                        if (scriptTimeout) clearTimeout(scriptTimeout);
+                        reject(error);
+                    };
+                });
+
+                document.head.appendChild(script);
+
+                // Wait for script to load with timeout
+                try {
+                    await scriptLoadPromise;
+                    console.log("[VideoPlayer] YouTube API script loaded successfully");
+
+                    // For alternative APIs, we need to initialize them differently
+                    if (apiUrl.includes('googleapis.com')) {
+                        // Load YouTube API through Google APIs client
+                        setTimeout(() => {
+                            if ((window as any).gapi) {
+                                (window as any).gapi.load('client:auth2', () => {
+                                    console.log('[VideoPlayer] Google APIs client loaded');
+                                    // Initialize a mock YT object for compatibility
+                                    if (!(window as any).YT) {
+                                        (window as any).YT = {
+                                            Player: function (elementId: string, options: any) {
+                                                console.warn('[VideoPlayer] Using fallback YouTube player');
+                                                return {
+                                                    playVideo: () => console.warn('YT fallback: playVideo'),
+                                                    pauseVideo: () => console.warn('YT fallback: pauseVideo'),
+                                                    getCurrentTime: () => 0,
+                                                    seekTo: () => console.warn('YT fallback: seekTo'),
+                                                    getPlayerState: () => -1,
+                                                    destroy: () => console.warn('YT fallback: destroy')
+                                                };
+                                            },
+                                            PlayerState: {
+                                                UNSTARTED: -1,
+                                                ENDED: 0,
+                                                PLAYING: 1,
+                                                PAUSED: 2,
+                                                BUFFERING: 3,
+                                                CUED: 5
+                                            }
+                                        };
+                                        if (isMounted) setYtApiLoaded(false); // Use HTML5 fallback
+                                    }
+                                });
+                            }
+                        }, 1000);
+                    }
+
+                    // Start polling for YT object availability
+                    startPolling();
+                } catch (error) {
                     console.warn(`[VideoPlayer] YouTube API load failed (attempt ${attempt}):`, error);
                     script.remove();
-                    
+
                     if (attempt < maxAttempts && isMounted) {
                         // Retry with exponential backoff
-                        setTimeout(() => loadYouTubeAPI(attempt + 1, maxAttempts), 1000 * Math.pow(2, attempt));
+                        const delay = Math.min(1000 * Math.pow(2, attempt), 10000); // Cap at 10 seconds
+                        console.log(`[VideoPlayer] Retrying in ${delay}ms...`);
+                        setTimeout(() => loadYouTubeAPI(attempt + 1, maxAttempts), delay);
                     } else if (isMounted) {
                         console.error("[VideoPlayer] YouTube API failed after all attempts - HTML5 video only");
                         setYtApiLoaded(false);
+                        // Show user-friendly message about YouTube API failure
+                        if (currentUrl && (currentUrl.includes("youtube") || currentUrl.includes("youtu.be"))) {
+                            console.warn("[VideoPlayer] Cannot load YouTube video due to API failure");
+                        }
                     }
-                };
-
-                script.onload = () => {
-                    console.log("[VideoPlayer] YouTube API script loaded successfully");
-                    // Start polling for YT object availability
-                    startPolling();
-                };
-
-                document.head.appendChild(script);
+                }
 
             } catch (error) {
                 console.error("[VideoPlayer] Error loading YouTube API:", error);
@@ -135,8 +223,8 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             if (pollInterval) return; // Already polling
 
             let pollAttempts = 0;
-            const maxPollAttempts = 30; // 30 seconds
-            
+            const maxPollAttempts = 45; // 45 seconds
+
             pollInterval = setInterval(() => {
                 if (!isMounted) {
                     if (pollInterval) clearInterval(pollInterval);
@@ -144,19 +232,36 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 }
 
                 pollAttempts++;
-                
+
+                // More detailed polling
                 if (checkYTApi()) {
+                    console.log(`[VideoPlayer] YouTube API ready after ${pollAttempts} seconds`);
                     if (pollInterval) {
                         clearInterval(pollInterval);
                         pollInterval = null;
                     }
-                } else if (pollAttempts >= maxPollAttempts) {
-                    console.warn("[VideoPlayer] YouTube API polling timeout - allowing HTML5 videos only");
-                    if (pollInterval) {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
+                    if (loadTimeout) {
+                        clearTimeout(loadTimeout);
+                        loadTimeout = null;
                     }
-                    if (isMounted) setYtApiLoaded(false);
+                } else {
+                    // Log more detailed status
+                    const hasWindow = typeof window !== 'undefined';
+                    const hasYT = hasWindow && (window as any).YT;
+                    const hasPlayer = hasYT && (window as any).YT.Player;
+
+                    if (pollAttempts % 10 === 0) { // Log every 10 seconds
+                        console.log(`[VideoPlayer] Polling status (${pollAttempts}s): window=${hasWindow}, YT=${!!hasYT}, Player=${!!hasPlayer}`);
+                    }
+
+                    if (pollAttempts >= maxPollAttempts) {
+                        console.warn("[VideoPlayer] YouTube API polling timeout - allowing HTML5 videos only");
+                        if (pollInterval) {
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                        }
+                        if (isMounted) setYtApiLoaded(false);
+                    }
                 }
             }, 1000);
         };
@@ -169,6 +274,10 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
+            }
+            if (loadTimeout) {
+                clearTimeout(loadTimeout);
+                loadTimeout = null;
             }
         };
     }, []);
@@ -190,9 +299,20 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 console.log("[VideoPlayer] Waiting for YouTube API loading status...");
                 return;
             }
-            
-            if (!ytApiLoaded) {
+
+            if (ytApiLoaded === false) {
                 console.warn("[VideoPlayer] YouTube API unavailable, cannot play YouTube videos");
+
+                // If host tried to load a YouTube video but API failed, clear it and show message
+                if (isHost && onStateChange) {
+                    console.log("[VideoPlayer] Auto-clearing YouTube video since API failed");
+                    // Small delay to avoid immediate state conflicts
+                    setTimeout(() => {
+                        if (onStateChange) {
+                            onStateChange({ url: "", isPlaying: false, currentTime: 0 }, true);
+                        }
+                    }, 100);
+                }
                 return;
             }
 
@@ -224,18 +344,24 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 return;
             }
 
-            if (!ytPlayerRef.current) {
-                const containerId = "yt-player-container";
-                const container = document.getElementById(containerId);
 
-                if (!container) {
-                    console.warn("[VideoPlayer] YT Container element not found in DOM");
+            const getOrigin = () => {
+                if (typeof window !== "undefined" && window.location.origin) {
+                    return window.location.origin;
+                }
+                // Fallback for server-side rendering or environments without window object
+                return "http://localhost:8000"; // Replace with your actual production domain
+            };
+
+            if (!ytPlayerRef.current) {
+                if (!ytContainerRef.current) {
+                    console.warn("[VideoPlayer] YT Container ref not ready in DOM");
                     return;
                 }
 
                 console.log("[VideoPlayer] Creating new YouTube Player for ID:", videoId);
                 try {
-                    ytPlayerRef.current = new (window as any).YT.Player(containerId, {
+                    ytPlayerRef.current = new (window as any).YT.Player(ytContainerRef.current, {
                         videoId: videoId,
                         playerVars: {
                             autoplay: isPlaying ? 1 : 0,
@@ -244,7 +370,7 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                             fs: 0,
                             modestbranding: 1,
                             rel: 0,
-                            origin: window.location.origin,
+                            origin: getOrigin(),
                             enablejsapi: 1
                         },
                         events: {
@@ -252,7 +378,15 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                                 console.log("[VideoPlayer] YouTube Player Ready");
                                 isYtReadyRef.current = true;
                                 if (isPlaying) {
-                                    ytPlayerRef.current.playVideo();
+                                    try {
+                                        ytPlayerRef.current.playVideo();
+                                    } catch (e) {
+                                        console.warn("[VideoPlayer] YouTube autoplay failed:", e);
+                                        setAutoplayBlocked(true);
+                                        if (onStateChange && isHost) {
+                                            onStateChange({ isPlaying: false }, true);
+                                        }
+                                    }
                                 }
                                 ytPlayerRef.current.seekTo(videoState?.currentTime || 0, true);
                             },
@@ -260,11 +394,21 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                                 if (!isHost || !onStateChange) return;
 
                                 const state = event.data;
-                                const time = ytPlayerRef.current?.getCurrentTime() || 0;
+                                let time = 0;
+
+                                // Safely get current time from YouTube player
+                                try {
+                                    if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
+                                        time = ytPlayerRef.current.getCurrentTime() || 0;
+                                    }
+                                } catch (error) {
+                                    console.warn('[VideoPlayer] Error getting time in state change event:', error);
+                                    time = 0;
+                                }
+
                                 const YT = (window as any).YT;
-                                
                                 if (!YT || !YT.PlayerState) return;
-                                
+
                                 if (state === YT.PlayerState.PLAYING) {
                                     onStateChange({ isPlaying: true, currentTime: time }, true);
                                 } else if (state === YT.PlayerState.PAUSED) {
@@ -282,11 +426,15 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                                     case 150: errorMessage = "Video embedding restricted by owner"; break;
                                 }
                                 console.warn(`[VideoPlayer] YouTube Error: ${errorMessage} (${e.data})`);
-                                
+
                                 // Reset player on severe errors
                                 if ([2, 5, 100, 101, 150].includes(e.data)) {
                                     ytPlayerRef.current = null;
                                     isYtReadyRef.current = false;
+                                    // Notify parent component about the error
+                                    if (onStateChange && isHost) {
+                                        onStateChange({ isPlaying: false }, true);
+                                    }
                                 }
                             }
                         }
@@ -298,13 +446,28 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             } else {
                 // Update existing player with new video
                 try {
-                    const loadedVideoUrl = ytPlayerRef.current.getVideoUrl?.() || "";
+                    let loadedVideoUrl = "";
+
+                    // Safely try to get current video URL
+                    if (typeof ytPlayerRef.current.getVideoUrl === 'function') {
+                        try {
+                            loadedVideoUrl = ytPlayerRef.current.getVideoUrl() || "";
+                        } catch (urlError) {
+                            console.warn("[VideoPlayer] Error getting video URL:", urlError);
+                        }
+                    }
+
                     if (!loadedVideoUrl.includes(videoId)) {
                         console.log("[VideoPlayer] Loading new Video ID:", videoId);
-                        ytPlayerRef.current.loadVideoById({
-                            videoId: videoId,
-                            startSeconds: videoState?.currentTime || 0
-                        });
+
+                        if (typeof ytPlayerRef.current.loadVideoById === 'function') {
+                            ytPlayerRef.current.loadVideoById({
+                                videoId: videoId,
+                                startSeconds: videoState?.currentTime || 0
+                            });
+                        } else {
+                            console.warn("[VideoPlayer] loadVideoById method not available");
+                        }
                     }
                 } catch (err) {
                     console.warn("[VideoPlayer] Failed to check/load video by ID:", err);
@@ -333,7 +496,18 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 video.src = currentUrl;
                 video.load();
                 if (isPlaying) {
-                    video.play().catch(e => console.log("Autoplay blocked on URL change", e));
+                    video.play().catch(e => {
+                        if (e.name === 'AbortError') {
+                            // Ignore AbortError - it's common when streams change quickly
+                            return;
+                        }
+                        console.log("Autoplay blocked on URL change", e);
+                        setAutoplayBlocked(true);
+                        // Pause the video state since autoplay failed
+                        if (onStateChange && isHost) {
+                            onStateChange({ isPlaying: false }, true);
+                        }
+                    });
                 }
             }
         }
@@ -346,7 +520,17 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             if (!ytPlayerRef.current || !isYtReadyRef.current || !videoState) return;
 
             const yt = ytPlayerRef.current;
-            const ytTime = yt.getCurrentTime();
+            let ytTime = 0;
+
+            try {
+                if (typeof yt.getCurrentTime === 'function') {
+                    ytTime = yt.getCurrentTime() || 0;
+                }
+            } catch (error) {
+                console.warn('[VideoPlayer] Error getting YouTube time in sync:', error);
+                return; // Skip sync if we can't get time
+            }
+
             const timeDiff = Math.abs(ytTime - videoState.currentTime);
             const syncThreshold = isHost ? 1.0 : 0.5;
 
@@ -354,17 +538,50 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 const now = Date.now();
                 const messageAge = videoState.timestamp ? (now - videoState.timestamp) / 1000 : 0;
                 const adjustedTime = videoState.currentTime + (isPlaying ? messageAge : 0);
-                yt.seekTo(adjustedTime, true);
+
+                try {
+                    if (typeof yt.seekTo === 'function') {
+                        yt.seekTo(adjustedTime, true);
+                    }
+                } catch (error) {
+                    console.warn('[VideoPlayer] Error seeking YouTube video:', error);
+                }
             }
 
-            const ytState = yt.getPlayerState();
+            let ytState = -1; // Default to unstarted
             const YT = (window as any).YT;
+
+            try {
+                if (typeof yt.getPlayerState === 'function') {
+                    ytState = yt.getPlayerState();
+                }
+            } catch (error) {
+                console.warn('[VideoPlayer] Error getting YouTube player state:', error);
+                return; // Skip state changes if we can't get state
+            }
+
             if (!YT || !YT.PlayerState) return;
-            
+
             if (isPlaying && ytState !== YT.PlayerState.PLAYING) {
-                yt.playVideo();
+                try {
+                    if (typeof yt.playVideo === 'function') {
+                        yt.playVideo();
+                    }
+                } catch (e) {
+                    console.warn("[VideoPlayer] YouTube play failed:", e);
+                    setAutoplayBlocked(true);
+                    if (onStateChange && isHost) {
+                        onStateChange({ isPlaying: false }, true);
+                    }
+                }
             } else if (!isPlaying && ytState === YT.PlayerState.PLAYING) {
-                yt.pauseVideo();
+                try {
+                    if (typeof yt.pauseVideo === 'function') {
+                        yt.pauseVideo();
+                    }
+                } catch (e) {
+                    console.warn("[VideoPlayer] YouTube pause failed:", e);
+                }
             }
         } else {
             if (!videoRef.current || !videoState) return;
@@ -383,8 +600,24 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
             if (isPlaying && video.paused) {
                 video.play().catch(e => {
+                    if (e.name === 'AbortError') {
+                        // Ignore AbortError - it's common when streams change quickly
+                        return;
+                    }
+                    console.log("Video play failed:", e.message);
+                    setAutoplayBlocked(true);
+
+                    // Try one more time after a short delay
                     setTimeout(() => {
-                        video.play().catch(e2 => console.log("Retry failed", e2));
+                        video.play().catch(e2 => {
+                            if (e2.name !== 'AbortError') {
+                                console.log("Retry failed", e2.message);
+                                // Update state to reflect that video isn't actually playing
+                                if (onStateChange && isHost) {
+                                    onStateChange({ isPlaying: false }, true);
+                                }
+                            }
+                        });
                     }, 100);
                 });
             } else if (!isPlaying && !video.paused) {
@@ -440,6 +673,20 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
     const handleLoadVideo = useCallback(async () => {
         if (localInputUrl.trim() && onStateChange && onPlaylistChange && playlistState) {
+            const isYouTubeUrl = localInputUrl.includes("youtube.com") || localInputUrl.includes("youtu.be");
+
+            // Check if trying to load YouTube video when API is unavailable
+            if (isYouTubeUrl && ytApiLoaded === false) {
+                alert("YouTube videos cannot be loaded because the YouTube API failed to initialize. Please try refreshing the page or use a direct video file instead (.mp4, .webm, etc.).");
+                return;
+            }
+
+            // Check if trying to load YouTube video while API is still loading
+            if (isYouTubeUrl && ytApiLoaded === null) {
+                alert("Please wait for YouTube API to finish loading before adding YouTube videos.");
+                return;
+            }
+
             const info = await extractVideoInfo(localInputUrl);
             const newItem: PlaylistItem = { ...info, id: Date.now().toString() };
 
@@ -450,10 +697,24 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             onStateChange({ url: newItem.url, isPlaying: true, currentTime: 0 }, true);
             setLocalInputUrl("");
         }
-    }, [localInputUrl, onStateChange, onPlaylistChange, playlistState, extractVideoInfo]);
+    }, [localInputUrl, onStateChange, onPlaylistChange, playlistState, extractVideoInfo, ytApiLoaded]);
 
     const handleAddToPlaylist = useCallback(async () => {
         if (localInputUrl.trim() && onPlaylistChange && playlistState) {
+            const isYouTubeUrl = localInputUrl.includes("youtube.com") || localInputUrl.includes("youtu.be");
+
+            // Check if trying to add YouTube video when API is unavailable
+            if (isYouTubeUrl && ytApiLoaded === false) {
+                alert("YouTube videos cannot be added because the YouTube API failed to initialize. Please try refreshing the page or use a direct video file instead (.mp4, .webm, etc.).");
+                return;
+            }
+
+            // Check if trying to add YouTube video while API is still loading
+            if (isYouTubeUrl && ytApiLoaded === null) {
+                alert("Please wait for YouTube API to finish loading before adding YouTube videos.");
+                return;
+            }
+
             const info = await extractVideoInfo(localInputUrl);
             const newItem: PlaylistItem = { ...info, id: Date.now().toString() };
 
@@ -461,9 +722,13 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             onPlaylistChange({ ...playlistState, playlist: newPlaylist }, true);
             setLocalInputUrl("");
         }
-    }, [localInputUrl, playlist, onPlaylistChange, playlistState, extractVideoInfo]);
+    }, [localInputUrl, playlist, onPlaylistChange, playlistState, extractVideoInfo, ytApiLoaded]);
 
     const handlePlayFromPlaylist = useCallback((index: number) => {
+        // Mark that user has interacted for autoplay permission
+        setUserInteracted(true);
+        setAutoplayBlocked(false);
+
         const item = playlist[index];
         if (item && onStateChange && onPlaylistChange && playlistState) {
             // Update current playing video and current index in playlist
@@ -550,6 +815,10 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
     }, [shuffle, onPlaylistChange, playlistState]);
 
     const togglePlay = useCallback(() => {
+        // Mark that user has interacted for autoplay permission
+        setUserInteracted(true);
+        setAutoplayBlocked(false);
+
         if (onStateChange) {
             const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
             const currentTime = isYouTube
@@ -574,7 +843,11 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
     useEffect(() => {
         if (!isHost || !currentUrl || !onStateChange) return;
 
-        let syncInterval: NodeJS.Timeout;
+        // Clear any existing interval from previous renders
+        if (syncIntervalRef.current) {
+            clearInterval(syncIntervalRef.current);
+            syncIntervalRef.current = null;
+        }
         let lastSyncTime = 0;
 
         const performSync = () => {
@@ -583,10 +856,23 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 if (ytPlayerRef.current && isYtReadyRef.current) {
                     const YT = (window as any).YT;
                     if (!YT || !YT.PlayerState) return;
-                    
-                    const currentTime = ytPlayerRef.current.getCurrentTime();
+
+                    let currentTime = 0;
+                    let ytState = -1;
+
+                    try {
+                        if (typeof ytPlayerRef.current.getCurrentTime === 'function') {
+                            currentTime = ytPlayerRef.current.getCurrentTime() || 0;
+                        }
+                        if (typeof ytPlayerRef.current.getPlayerState === 'function') {
+                            ytState = ytPlayerRef.current.getPlayerState();
+                        }
+                    } catch (error) {
+                        console.warn('[VideoPlayer] Error in sync loop:', error);
+                        return; // Skip this sync cycle
+                    }
+
                     const now = Date.now();
-                    const ytState = ytPlayerRef.current.getPlayerState();
                     const isPlaying = ytState === YT.PlayerState.PLAYING;
 
                     if (now - lastSyncTime >= 2000 || Math.abs(currentTime - (videoState?.currentTime || 0)) > 0.5) {
@@ -608,7 +894,10 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
 
         // Use adaptive sync frequency - more frequent when playing, less when paused
         const updateSyncFrequency = () => {
-            if (syncInterval) clearInterval(syncInterval);
+            if (syncIntervalRef.current) {
+                clearInterval(syncIntervalRef.current);
+                syncIntervalRef.current = null;
+            }
 
             const isYouTube = currentUrl.includes("youtube") || currentUrl.includes("youtu.be");
             let isVideoPlaying = false;
@@ -616,14 +905,20 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             if (isYouTube && ytPlayerRef.current && isYtReadyRef.current) {
                 const YT = (window as any).YT;
                 if (YT && YT.PlayerState) {
-                    isVideoPlaying = ytPlayerRef.current.getPlayerState() === YT.PlayerState.PLAYING;
+                    try {
+                        if (typeof ytPlayerRef.current.getPlayerState === 'function') {
+                            isVideoPlaying = ytPlayerRef.current.getPlayerState() === YT.PlayerState.PLAYING;
+                        }
+                    } catch (error) {
+                        console.warn('[VideoPlayer] Error checking player state for sync frequency:', error);
+                    }
                 }
             } else if (videoRef.current) {
                 isVideoPlaying = !videoRef.current.paused;
             }
 
             const frequency = isVideoPlaying ? 1500 : 5000;
-            syncInterval = setInterval(performSync, frequency);
+            syncIntervalRef.current = setInterval(performSync, frequency);
         };
 
         updateSyncFrequency();
@@ -636,7 +931,10 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
         }
 
         return () => {
-            if (syncInterval) clearInterval(syncInterval);
+            if (syncIntervalRef.current) {
+                clearInterval(syncIntervalRef.current);
+                syncIntervalRef.current = null;
+            }
             if (video) {
                 video.removeEventListener('play', updateSyncFrequency);
                 video.removeEventListener('pause', updateSyncFrequency);
@@ -672,27 +970,44 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                 <div className={styles.inputWrapper}>
                     <LinkIcon size={18} className={styles.inputIcon} />
                     <Input
-                        placeholder={ytApiLoaded === false ? "Paste direct video URL (.mp4, .webm)..." : "Paste YouTube or video URL..."}
+                        placeholder={
+                            ytApiLoaded === false
+                                ? "Paste direct video URL (.mp4, .webm, .mov)..."
+                                : ytApiLoaded === null
+                                    ? "Loading YouTube API..."
+                                    : "Paste YouTube or video URL..."
+                        }
                         value={localInputUrl}
                         onChange={(e) => setLocalInputUrl(e.target.value)}
                         className={styles.input}
+                        disabled={ytApiLoaded === null}
                     />
                 </div>
-                <Button onClick={handleLoadVideo} disabled={!localInputUrl.trim() || !isHost} className={styles.loadButton}>
-                    Load Video {!isHost && "(Host Only)"}
+                <Button
+                    onClick={handleLoadVideo}
+                    disabled={!localInputUrl.trim() || !isHost || ytApiLoaded === null}
+                    className={styles.loadButton}
+                    title={ytApiLoaded === null ? "Waiting for YouTube API to load..." : !isHost ? "Only host can load videos" : ""}
+                >
+                    {ytApiLoaded === null ? "Loading..." : "Load Video"} {!isHost && "(Host Only)"}
                 </Button>
                 {isHost && process.env.NODE_ENV === 'development' && (
-                    <Button 
-                        variant="outline" 
+                    <Button
+                        variant="outline"
                         onClick={() => setLocalInputUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")}
                         className={styles.testButton}
                     >
                         Test Video
                     </Button>
                 )}
-                <Button variant="outline" onClick={handleAddToPlaylist} disabled={!localInputUrl.trim()}>
+                <Button
+                    variant="outline"
+                    onClick={handleAddToPlaylist}
+                    disabled={!localInputUrl.trim() || ytApiLoaded === null}
+                    title={ytApiLoaded === null ? "Waiting for YouTube API to load..." : ""}
+                >
                     <Plus size={18} />
-                    Add to Playlist
+                    {ytApiLoaded === null ? "Loading..." : "Add to Playlist"}
                 </Button>
                 <button
                     className={`${styles.playlistToggle} ${showPlaylist ? styles.active : ""}`}
@@ -707,12 +1022,12 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
             <div className={styles.mainArea}>
                 <div className={styles.videoContainer}>
                     {/* Keep both elements in DOM to avoid destroying the YT IFrame on type switch */}
-                    <div
-                        id="yt-player-container"
-                        ref={ytContainerRef}
-                        className={styles.video}
-                        style={{ display: currentUrl && (currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be")) ? 'block' : 'none' }}
-                    />
+                    <div style={{ display: currentUrl && (currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be")) ? 'block' : 'none' }}>
+                        <div
+                            ref={ytContainerRef}
+                            className={styles.video}
+                        />
+                    </div>
 
                     {currentUrl && !currentUrl.includes("youtube") && !currentUrl.includes("youtu.be") && (
                         <video
@@ -744,15 +1059,95 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                                 </p>
                             )}
                             {ytApiLoaded === false && (
-                                <p className={styles.apiWarning}>
-                                    ⚠️ YouTube API failed to load. Only direct video files (.mp4, .webm, etc.) will work.
-                                </p>
+                                <div className={styles.apiWarning}>
+                                    <div className={styles.warningHeader}>
+                                        ⚠️ YouTube API Unavailable
+                                    </div>
+                                    <p>YouTube videos cannot be played due to network issues or API restrictions.</p>
+                                    <p><strong>Alternatives:</strong></p>
+                                    <ul>
+                                        <li>Use direct video files (.mp4, .webm, .mov)</li>
+                                        <li>Try refreshing the page</li>
+                                        <li>Check your network connection</li>
+                                    </ul>
+                                    {isHost && (
+                                        <button
+                                            className={styles.retryButton}
+                                            onClick={() => {
+                                                console.log('[VideoPlayer] Manual API retry triggered');
+                                                setYtApiLoaded(null);
+                                                // Clear any existing scripts to force a fresh reload
+                                                const existingScripts = document.querySelectorAll('script[src*="youtube.com"], script[src*="googleapis.com"]');
+                                                existingScripts.forEach(script => script.remove());
+                                                // Clear any global callbacks
+                                                if ((window as any).onYouTubeIframeAPIReady) {
+                                                    delete (window as any).onYouTubeIframeAPIReady;
+                                                }
+                                                window.location.reload();
+                                            }}
+                                        >
+                                            Refresh Page & Retry
+                                        </button>
+                                    )}
+                                </div>
                             )}
                             {process.env.NODE_ENV === 'development' && (
                                 <div className={styles.debugInfo}>
                                     <small>Debug: isHost={isHost ? 'true' : 'false'}, currentUrl="{currentUrl}", ytApiLoaded={ytApiLoaded === null ? 'loading' : ytApiLoaded ? 'true' : 'false'}</small>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Autoplay blocked notification */}
+                    {autoplayBlocked && currentUrl && (
+                        <div className={styles.autoplayNotice}>
+                            <div className={styles.autoplayContent}>
+                                <Play size={24} />
+                                <div>
+                                    <h4>Click to play</h4>
+                                    <p>Autoplay was blocked by your browser. Click the play button to start.</p>
+                                </div>
+                                <Button onClick={togglePlay} className={styles.playButton}>
+                                    <Play size={18} />
+                                    Play
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* YouTube API failed notification for current YouTube video */}
+                    {currentUrl && ytApiLoaded === false && (currentUrl.includes("youtube") || currentUrl.includes("youtu.be")) && (
+                        <div className={styles.youtubeFailedNotice}>
+                            <div className={styles.youtubeFailedContent}>
+                                <div className={styles.youtubeFailedIcon}>🚫</div>
+                                <div>
+                                    <h4>YouTube video cannot be played</h4>
+                                    <p>The YouTube API failed to load. This video cannot be displayed.</p>
+                                    {isHost && (
+                                        <div className={styles.hostActions}>
+                                            <p><strong>Host options:</strong></p>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => {
+                                                    if (onStateChange) {
+                                                        onStateChange({ url: "", isPlaying: false, currentTime: 0 }, true);
+                                                    }
+                                                }}
+                                                className={styles.clearButton}
+                                            >
+                                                Clear Video
+                                            </Button>
+                                            <Button
+                                                onClick={() => window.location.reload()}
+                                                className={styles.refreshButton}
+                                            >
+                                                Refresh Page
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -852,7 +1247,7 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                     size="sm"
                     onClick={() => {
                         console.log("[VideoPlayer] Manual Player Reset Triggered");
-                        
+
                         // Clean up existing player
                         if (ytPlayerRef.current) {
                             try {
@@ -861,23 +1256,23 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
                                 console.warn("[VideoPlayer] Error destroying player during reset:", err);
                             }
                         }
-                        
+
                         // Reset all state
                         ytPlayerRef.current = null;
                         isYtReadyRef.current = false;
-                        
+
                         // Remove any existing YouTube scripts
                         const existingScripts = document.querySelectorAll('script[src*="youtube.com/iframe_api"]');
                         existingScripts.forEach(script => script.remove());
-                        
+
                         // Reset API loading state to trigger fresh load
                         setYtApiLoaded(null);
-                        
+
                         // Clear any existing global callback
                         if ((window as any).onYouTubeIframeAPIReady) {
                             delete (window as any).onYouTubeIframeAPIReady;
                         }
-                        
+
                         console.log("[VideoPlayer] Player reset complete - will reload API");
                     }}
                     className="text-xs text-white/40 hover:text-white"
@@ -888,3 +1283,10 @@ export default function VideoPlayer({ isHost = false, videoState, playlistState,
         </div>
     );
 }
+
+export default withErrorBoundary(VideoPlayer, {
+    componentName: "VideoPlayer",
+    onError: (error, errorInfo) => {
+        console.error("VideoPlayer Error:", error, errorInfo);
+    },
+});

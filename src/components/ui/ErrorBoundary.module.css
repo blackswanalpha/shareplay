@@ -1,0 +1,270 @@
+.errorBoundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 2rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.errorContent {
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+}
+
+.errorIcon {
+  color: #ef4444;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.errorMessage h2 {
+  margin: 0 0 0.5rem 0;
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.errorMessage p {
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.errorDetails {
+  margin: 1rem 0;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 1rem;
+}
+
+.errorDetails summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.errorDetails summary:hover {
+  color: #1f2937;
+}
+
+.errorStack {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin-top: 0.5rem;
+}
+
+.errorStack pre {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: #f9fafb;
+  border-radius: 0.25rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+}
+
+.errorActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.actionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+}
+
+.errorMeta {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.errorMeta small {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+/* Responsive design */
+@media (min-width: 640px) {
+  .errorBoundary {
+    min-height: 300px;
+    padding: 3rem;
+  }
+  
+  .errorActions {
+    flex-direction: row;
+    justify-content: center;
+  }
+  
+  .actionButton {
+    width: auto;
+    min-width: 120px;
+  }
+  
+  .errorMeta {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .errorBoundary {
+    background: #1f1f1f;
+    border-color: #ef4444;
+    color: #f3f4f6;
+  }
+  
+  .errorMessage h2 {
+    color: #f9fafb;
+  }
+  
+  .errorMessage p {
+    color: #d1d5db;
+  }
+  
+  .errorDetails {
+    background: #111827;
+    border-color: #374151;
+  }
+  
+  .errorDetails summary {
+    color: #e5e7eb;
+  }
+  
+  .errorDetails summary:hover {
+    color: #f9fafb;
+  }
+  
+  .errorStack {
+    color: #d1d5db;
+  }
+  
+  .errorStack pre {
+    background: #1f2937;
+    border-color: #374151;
+    color: #f3f4f6;
+  }
+  
+  .errorMeta {
+    border-top-color: #374151;
+  }
+  
+  .errorMeta small {
+    color: #9ca3af;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .errorBoundary {
+    border: 2px solid #dc2626;
+    background: #ffffff;
+    color: #000000;
+  }
+  
+  .errorIcon {
+    color: #dc2626;
+  }
+  
+  .errorMessage h2 {
+    color: #000000;
+  }
+  
+  .errorDetails {
+    border: 2px solid #000000;
+  }
+  
+  .errorStack pre {
+    border: 1px solid #000000;
+    background: #f5f5f5;
+    color: #000000;
+  }
+}
+
+/* Print styles */
+@media print {
+  .errorBoundary {
+    background: white;
+    border: 2px solid #000000;
+    box-shadow: none;
+  }
+  
+  .errorActions {
+    display: none;
+  }
+  
+  .errorDetails {
+    background: #f9f9f9;
+  }
+  
+  .errorStack pre {
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+  }
+}
+
+/* Animation for retry button */
+.actionButton:hover {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+.actionButton:active {
+  transform: translateY(0);
+}
+
+/* Loading state for retry */
+.actionButton[data-loading="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.actionButton[data-loading="true"]::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Focus styles for accessibility */
+.actionButton:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.errorDetails summary:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
