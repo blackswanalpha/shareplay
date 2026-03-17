@@ -5,6 +5,7 @@ import { Manager, type Socket } from "socket.io-client";
 import { useSetAtom } from "jotai";
 import { API_URL } from "@/lib/config";
 import { getAccessToken, apiGetChatHistory, apiGetPlaylist } from "@/lib/api";
+import { resolveAvatarUrl } from "@/lib/adapters";
 import {
   participantsAtom,
   messagesAtom,
@@ -24,10 +25,6 @@ import {
 } from "@/store/roomAtoms";
 import type { RoomParticipant, ChatMessage, QueueTrack, PendingUser, Broadcast } from "@/lib/types";
 import { toast } from "sonner";
-
-function avatarFallback(username: string): string {
-  return `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(username)}`;
-}
 
 export interface SocketActions {
   sendMessage: (text: string) => void;
@@ -165,7 +162,7 @@ export function useSocket(roomId: string): SocketActions {
         setParticipants(data.participants.map((p): RoomParticipant => ({
           id: String(p.user_id),
           username: p.username,
-          avatar_url: p.avatar_url || avatarFallback(p.username),
+          avatar_url: resolveAvatarUrl(p.avatar_url ?? null, p.username),
           is_online: true,
           role: (p.role === "primary_host" ? "host" : p.role === "co_host" ? "co-host" : "member") as "host" | "co-host" | "member",
           is_muted: false,
@@ -197,7 +194,7 @@ export function useSocket(roomId: string): SocketActions {
             sender: {
               id: String(m.user_id),
               username: m.username,
-              avatar_url: m.avatar_url || avatarFallback(m.username),
+              avatar_url: resolveAvatarUrl(m.avatar_url ?? null, m.username),
             },
             text: m.content,
             is_system: m.message_type === "system",
@@ -244,7 +241,7 @@ export function useSocket(roomId: string): SocketActions {
       const pending: PendingUser = {
         id: String(data.user_id),
         username: data.username,
-        avatar_url: data.avatar_url || avatarFallback(data.username),
+        avatar_url: resolveAvatarUrl(data.avatar_url ?? null, data.username),
         requested_at: new Date().toISOString(),
       };
       setPendingUsers((prev) => {
@@ -267,7 +264,7 @@ export function useSocket(roomId: string): SocketActions {
         return [...prev, {
           id: String(data.user_id),
           username: data.username,
-          avatar_url: data.avatar_url || avatarFallback(data.username),
+          avatar_url: resolveAvatarUrl(data.avatar_url ?? null, data.username),
           is_online: true,
           role: (data.role === "primary_host" ? "host" : data.role === "co_host" ? "co-host" : "member") as "host" | "co-host" | "member",
           is_muted: false,
@@ -333,7 +330,7 @@ export function useSocket(roomId: string): SocketActions {
         sender: {
           id: String(data.user_id),
           username: data.username,
-          avatar_url: data.avatar_url || avatarFallback(data.username),
+          avatar_url: resolveAvatarUrl(data.avatar_url ?? null, data.username),
         },
         text: data.content,
         is_system: data.message_type === "system",

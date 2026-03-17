@@ -24,7 +24,7 @@ function avatarFallback(username: string): string {
   return `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(username)}`;
 }
 
-function resolveAvatarUrl(url: string | null, username: string): string {
+export function resolveAvatarUrl(url: string | null, username: string): string {
   if (!url) return avatarFallback(username);
   if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
   return url;

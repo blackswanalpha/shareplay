@@ -255,7 +255,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     <ScreenShareContext.Provider value={screenShareHook}>
       <div
         style={{
-          minHeight: "100vh",
+          height: "100vh",
           background: "#0a0505",
           backgroundImage: "radial-gradient(circle, rgba(255,66,66,0.05) 1px, transparent 1px)",
           backgroundSize: "30px 30px",

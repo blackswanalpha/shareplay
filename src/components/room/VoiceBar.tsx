@@ -79,7 +79,7 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
         position: "sticky",
         bottom: 0,
         zIndex: 50,
-        height: 80,
+        height: 68,
         background: "rgba(255,255,255,0.05)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
