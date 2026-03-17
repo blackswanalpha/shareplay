@@ -1,42 +1,153 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #000;
+  color: #f5f5f5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+::selection {
+  background: rgba(255, 59, 59, 0.3);
+  color: #fff;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+/* Floating orb animation for landing background */
+@keyframes float-orb {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
   }
+  33% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 15px) scale(0.95);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 59, 59, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 59, 59, 0.5);
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid rgba(255, 59, 59, 0.6);
+  outline-offset: 2px;
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dashboard responsive grid */
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Command palette item hover */
+[cmdk-item][data-selected="true"] {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+[cmdk-group-heading] {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #555;
+}
+
+/* Settings sidebar responsive */
+@media (max-width: 768px) {
+  .settings-sidebar-desktop { display: none !important; }
+  .settings-mobile-menu-btn { display: flex !important; }
+}
+@media (min-width: 769px) {
+  .settings-sidebar-desktop { display: flex !important; }
+  .settings-mobile-menu-btn { display: none !important; }
+}
+
+/* Friend card actions stack on small screens */
+@media (max-width: 480px) {
+  .friend-card-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+}
+
+/* Landing card responsive */
+@media (max-width: 768px) {
+  .landing-card {
+    max-width: min(90vw, 400px) !important;
+    padding: 32px !important;
+  }
+  .landing-card h1 {
+    font-size: 28px !important;
+  }
+}
+
+/* Room responsive layout */
+@media (max-width: 768px) {
+  .room-layout { flex-direction: column !important; }
+  .room-sidebar { width: 100% !important; height: auto !important; max-height: 50vh !important; }
+  .room-main { width: 100% !important; }
+  .room-sidebar-toggle { display: flex !important; }
+}
+@media (min-width: 769px) {
+  .room-sidebar-toggle { display: none !important; }
+}
+
+/* Lobby responsive */
+@media (max-width: 768px) {
+  .lobby-layout { flex-direction: column !important; }
+}
+
+/* Speaking pulse animation */
+@keyframes speaking-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
 }

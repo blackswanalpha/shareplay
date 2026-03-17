@@ -1,0 +1,1 @@
+SharePlay is a real-time collaborative media platform where friends watch videos and listen to music together in synced rooms. Built with Next.js 16, React 19, and Socket.io. Features voice chat, shared queues, a friends system, and a dark glass-morphism UI with custom error pages.

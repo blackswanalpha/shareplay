@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SharePlay
+
+Real-time collaborative media platform — watch videos and listen to music together with friends.
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router, React 19, Turbopack)
+- **UI:** Chakra UI 3, Framer Motion, Phosphor Icons
+- **State:** TanStack React Query, React Context
+- **Real-time:** Socket.io
+- **Media:** React Player, Howler.js
+- **Language:** TypeScript 5
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local`:
 
-## Learn More
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├── app/                  # Next.js App Router pages
+│   ├── auth/             # Login & signup
+│   ├── dashboard/        # Main dashboard, friends, settings, notifications
+│   ├── room/[roomId]/    # Room view & lobby
+│   ├── not-found.tsx     # 404 error page
+│   ├── forbidden.tsx     # 403 error page
+│   ├── error.tsx         # 500 error boundary
+│   └── global-error.tsx  # Root error boundary
+├── components/
+│   ├── dashboard/        # Dashboard components
+│   ├── room/             # Room & lobby components
+│   ├── landing/          # Landing page
+│   ├── friends/          # Friend management
+│   ├── settings/         # User settings
+│   ├── notifications/    # Notification feed
+│   ├── errors/           # Redirect interstitial (3xx)
+│   └── ui/               # Reusable UI kit (GlassPanel, Logo, TabBar, etc.)
+├── hooks/                # Custom React hooks
+├── lib/                  # API client, types, adapters, config
+├── providers/            # Chakra, Auth, React Query providers
+└── theme/                # Chakra UI theme tokens
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Features
 
-## Deploy on Vercel
+- **Rooms** — Create or join watch/listen rooms with friends
+- **Synced Playback** — Video and music stay in sync across all participants
+- **Voice Chat** — Real-time voice with mute, deafen, and speaking indicators
+- **Text Chat** — In-room messaging with system events
+- **Queue** — Collaborative media queue management
+- **Friends** — Add friends, see who's online, send invites
+- **Notifications** — Invites, mentions, role changes, system alerts
+- **Command Palette** — Quick access via `Cmd+K` / `Ctrl+K`
+- **Error Pages** — Custom branded pages for 404, 403, 500, and 3xx redirects
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Design System
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Dark theme with glass-morphism aesthetic:
+
+| Token | Value |
+|-------|-------|
+| Brand | `#ff3b3b` (crimson red) |
+| Surface | `#000` / `#0a0a0a` / `#111` |
+| Glass | `rgba(255,255,255,0.04)` + backdrop blur |
+| Heading font | Space Grotesk |
+| Body font | Inter |
+| Mono font | JetBrains Mono |
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start dev server |
+| `pnpm build` | Production build |
+| `pnpm start` | Start production server |
+| `pnpm lint` | Run ESLint |
+
+## License
+
+MIT
