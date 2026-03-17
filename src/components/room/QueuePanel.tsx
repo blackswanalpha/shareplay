@@ -15,7 +15,7 @@ import {
   ClockCounterClockwise,
 } from "@phosphor-icons/react";
 import { queueAtom, playerStateAtom } from "@/store/roomAtoms";
-import { useAuth } from "@/providers/AuthProvider";
+import { useCurrentRole } from "@/hooks/useCurrentRole";
 import type { SocketActions } from "@/hooks/useSocket";
 
 interface QueuePanelProps {
@@ -31,7 +31,7 @@ function formatDuration(seconds: number): string {
 export function QueuePanel({ actions }: QueuePanelProps) {
   const queue = useAtomValue(queueAtom);
   const playerState = useAtomValue(playerStateAtom);
-  const { user } = useAuth();
+  const { canSubmitMedia } = useCurrentRole();
   const [urlInput, setUrlInput] = useState("");
   const [recentExpanded, setRecentExpanded] = useState(false);
 
@@ -272,65 +272,67 @@ export function QueuePanel({ actions }: QueuePanelProps) {
       )}
 
       {/* Add to Queue */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 10,
-            padding: "0 12px",
-            height: 40,
-          }}
-        >
-          <Link size={16} style={{ color: "#555", flexShrink: 0 }} />
-          <input
-            type="text"
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Paste video URL..."
+      {canSubmitMedia && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div
             style={{
               flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "#f5f5f5",
-              fontSize: 13,
-              fontFamily: "var(--font-inter), sans-serif",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              padding: "0 12px",
+              height: 40,
             }}
-          />
+          >
+            <Link size={16} style={{ color: "#555", flexShrink: 0 }} />
+            <input
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Paste video URL..."
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#f5f5f5",
+                fontSize: 13,
+                fontFamily: "var(--font-inter), sans-serif",
+              }}
+            />
+          </div>
+          <button
+            onClick={handleAdd}
+            aria-label="Add to playlist"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 40,
+              height: 40,
+              background: "rgba(255,66,66,0.15)",
+              border: "1px solid rgba(255,66,66,0.3)",
+              borderRadius: 10,
+              color: "#ff4242",
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,66,66,0.25)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,66,66,0.15)";
+            }}
+          >
+            <Plus size={20} weight="bold" />
+          </button>
         </div>
-        <button
-          onClick={handleAdd}
-          aria-label="Add to playlist"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 40,
-            height: 40,
-            background: "rgba(255,66,66,0.15)",
-            border: "1px solid rgba(255,66,66,0.3)",
-            borderRadius: 10,
-            color: "#ff4242",
-            cursor: "pointer",
-            flexShrink: 0,
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255,66,66,0.25)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(255,66,66,0.15)";
-          }}
-        >
-          <Plus size={20} weight="bold" />
-        </button>
-      </div>
+      )}
 
       {/* Up Next Section */}
       <p
@@ -365,7 +367,7 @@ export function QueuePanel({ actions }: QueuePanelProps) {
               fontFamily: "var(--font-inter), sans-serif",
             }}
           >
-            Queue is empty. Add a URL above.
+            Queue is empty.{canSubmitMedia ? " Add a URL above." : ""}
           </p>
         </div>
       )}

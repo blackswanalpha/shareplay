@@ -40,6 +40,7 @@ export interface SocketActions {
   skipTrack: () => void;
   approveJoin: (userId: string) => void;
   declineJoin: (userId: string) => void;
+  assignRole: (targetUserId: string, role: string) => void;
   sendSignal: (targetUserId: string, signal: unknown) => void;
   sendScreenShareSignal: (targetUserId: string, signal: unknown) => void;
   getIceServers: () => Promise<RTCIceServer[]>;
@@ -273,6 +274,23 @@ export function useSocket(roomId: string): SocketActions {
           is_screen_sharing: false,
         }];
       });
+    });
+
+    roomSocket.on("role_changed", (data: { target_user_id: number; new_role: string; changed_by: number }) => {
+      if (cleaned) return;
+      const frontendRole = (
+        data.new_role === "primary_host" ? "host" :
+        data.new_role === "co_host" ? "co-host" : "member"
+      ) as "host" | "co-host" | "member";
+
+      setParticipants((prev) =>
+        prev.map((p) => {
+          if (p.id === String(data.target_user_id)) return { ...p, role: frontendRole };
+          // Host transfer: demote old host to co-host
+          if (data.new_role === "primary_host" && p.id === String(data.changed_by)) return { ...p, role: "co-host" as const };
+          return p;
+        })
+      );
     });
 
     // --- Broadcast listeners ---
@@ -632,6 +650,13 @@ export function useSocket(roomId: string): SocketActions {
     setPendingUsers((prev) => prev.filter((p) => p.id !== userId));
   }, [setPendingUsers]);
 
+  const assignRole = useCallback((targetUserId: string, role: string) => {
+    socketsRef.current?.room.emit("assign_role", {
+      target_user_id: Number(targetUserId),
+      role,
+    });
+  }, []);
+
   const sendSignal = useCallback((targetUserId: string, signal: unknown) => {
     socketsRef.current?.stream.emit("signal", {
       room_code: roomId,
@@ -705,6 +730,7 @@ export function useSocket(roomId: string): SocketActions {
     skipTrack,
     approveJoin,
     declineJoin,
+    assignRole,
     sendSignal,
     sendScreenShareSignal,
     getIceServers,

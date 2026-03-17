@@ -227,9 +227,10 @@ export interface ApiSession {
   room_id: number;
   room_code: string;
   room_name: string;
+  room_type: string | null;
   joined_at: string;
   left_at: string | null;
-  duration_seconds: number;
+  duration_seconds: number | null;
 }
 
 export interface ApiRoomInvite {

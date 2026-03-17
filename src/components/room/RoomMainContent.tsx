@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useAtomValue } from "jotai";
 import { roomAtom, playerStateAtom, participantsAtom, screenShareAtom } from "@/store/roomAtoms";
 import { AvatarGroup } from "@/components/ui/AvatarGroup";
+import { useCurrentRole } from "@/hooks/useCurrentRole";
 import type { SocketActions } from "@/hooks/useSocket";
 import { ScreenShareContext } from "./RoomPage";
 import { ScreenShareViewer } from "./ScreenShareViewer";
@@ -34,6 +35,7 @@ export function RoomMainContent({ actions }: RoomMainContentProps) {
   const participants = useAtomValue(participantsAtom);
   const screenShare = useAtomValue(screenShareAtom);
   const { remoteStream, localStream, isLocalSharing, stopSharing } = useContext(ScreenShareContext);
+  const { canSubmitMedia } = useCurrentRole();
 
   const playerMode = room?.type ?? "watch";
   const onlineParticipants = participants.filter((p) => p.is_online);
@@ -56,10 +58,12 @@ export function RoomMainContent({ actions }: RoomMainContentProps) {
   return (
     <div className="room-main" style={{ flex: 1, minWidth: 0, padding: 24, overflowY: "auto" }}>
       {/* YouTube URL Bar */}
-      <YouTubeUrlBar
-        onPlayNow={handlePlayNow}
-        onAddToQueue={handleAddToQueue}
-      />
+      {canSubmitMedia && (
+        <YouTubeUrlBar
+          onPlayNow={handlePlayNow}
+          onAddToQueue={handleAddToQueue}
+        />
+      )}
 
       {/* Screen Share Viewer */}
       {isScreenShareActive && screenShareStream && (

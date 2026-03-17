@@ -47,6 +47,19 @@ export function RecentSessions({ sessions }: RecentSessionsProps) {
       </h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {sessions.length === 0 && (
+          <div
+            style={{
+              fontSize: 13,
+              color: "#555",
+              fontFamily: "var(--font-inter), sans-serif",
+              textAlign: "center",
+              padding: "16px 0",
+            }}
+          >
+            No sessions yet. Join a room to get started!
+          </div>
+        )}
         {sessions.map((session) => (
           <div
             key={session.id}

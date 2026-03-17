@@ -105,8 +105,8 @@ export function adaptSession(api: ApiSession): Session {
   return {
     id: String(api.id),
     room_name: api.room_name,
-    type: "watch",
-    duration_minutes: Math.round(api.duration_seconds / 60),
+    type: (api.room_type as "watch" | "music") || "watch",
+    duration_minutes: api.duration_seconds != null ? Math.round(api.duration_seconds / 60) : 0,
     ended_at: api.left_at || api.joined_at,
   };
 }

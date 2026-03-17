@@ -158,7 +158,7 @@ export function Dashboard() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr",
+            gridTemplateColumns: "1fr 1fr",
             gap: 24,
           }}
           className="dashboard-grid"

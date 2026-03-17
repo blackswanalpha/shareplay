@@ -9,15 +9,57 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  ShieldCheck,
+  ArrowsClockwise,
+  UserMinus,
 } from "@phosphor-icons/react";
 import { participantsAtom, pendingUsersAtom } from "@/store/roomAtoms";
 import type { SocketActions } from "@/hooks/useSocket";
+import { useCurrentRole } from "@/hooks/useCurrentRole";
+import { MoreMenu } from "@/components/ui/MoreMenu";
+import type { RoomParticipant } from "@/lib/types";
 
 interface PeoplePanelProps {
   actions: SocketActions;
 }
 
+function getRoleMenuItems(
+  participant: RoomParticipant,
+  assignRole: (targetUserId: string, role: string) => void,
+  canTransferHost: boolean,
+) {
+  const items: { label: string; icon?: React.ReactNode; danger?: boolean; onClick: () => void }[] = [];
+
+  if (participant.role === "member") {
+    items.push({
+      label: "Promote to Co-host",
+      icon: <ShieldCheck size={16} />,
+      onClick: () => assignRole(participant.id, "co_host"),
+    });
+  }
+
+  if (participant.role === "co-host") {
+    items.push({
+      label: "Demote to Member",
+      icon: <UserMinus size={16} />,
+      onClick: () => assignRole(participant.id, "viewer"),
+    });
+  }
+
+  if (canTransferHost) {
+    items.push({
+      label: "Transfer Host",
+      icon: <ArrowsClockwise size={16} />,
+      danger: true,
+      onClick: () => assignRole(participant.id, "primary_host"),
+    });
+  }
+
+  return items;
+}
+
 export function PeoplePanel({ actions }: PeoplePanelProps) {
+  const { currentUserId, canManageRoles, canManageJoinRequests, canTransferHost } = useCurrentRole();
   const participants = useAtomValue(participantsAtom);
   const pendingUsers = useAtomValue(pendingUsersAtom);
 
@@ -97,6 +139,10 @@ export function PeoplePanel({ actions }: PeoplePanelProps) {
               <Microphone size={16} />
             )}
           </div>
+
+          {canManageRoles && p.id !== currentUserId && (canTransferHost || p.role !== "host") && (
+            <MoreMenu items={getRoleMenuItems(p, actions.assignRole, canTransferHost)} />
+          )}
         </div>
       ))}
 
@@ -176,58 +222,60 @@ export function PeoplePanel({ actions }: PeoplePanelProps) {
                 </p>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                <button
-                  onClick={() => actions.approveJoin(pending.id)}
-                  aria-label="Approve"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 32,
-                    height: 32,
-                    background: "rgba(34,197,94,0.12)",
-                    border: "1px solid rgba(34,197,94,0.25)",
-                    borderRadius: 8,
-                    color: "#22c55e",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(34,197,94,0.25)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(34,197,94,0.12)";
-                  }}
-                >
-                  <CheckCircle size={18} weight="bold" />
-                </button>
-                <button
-                  onClick={() => actions.declineJoin(pending.id)}
-                  aria-label="Decline"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 32,
-                    height: 32,
-                    background: "rgba(255,66,66,0.12)",
-                    border: "1px solid rgba(255,66,66,0.25)",
-                    borderRadius: 8,
-                    color: "#ff4242",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(255,66,66,0.25)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(255,66,66,0.12)";
-                  }}
-                >
-                  <XCircle size={18} weight="bold" />
-                </button>
-              </div>
+              {canManageJoinRequests && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => actions.approveJoin(pending.id)}
+                    aria-label="Approve"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 32,
+                      height: 32,
+                      background: "rgba(34,197,94,0.12)",
+                      border: "1px solid rgba(34,197,94,0.25)",
+                      borderRadius: 8,
+                      color: "#22c55e",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(34,197,94,0.25)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(34,197,94,0.12)";
+                    }}
+                  >
+                    <CheckCircle size={18} weight="bold" />
+                  </button>
+                  <button
+                    onClick={() => actions.declineJoin(pending.id)}
+                    aria-label="Decline"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 32,
+                      height: 32,
+                      background: "rgba(255,66,66,0.12)",
+                      border: "1px solid rgba(255,66,66,0.25)",
+                      borderRadius: 8,
+                      color: "#ff4242",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(255,66,66,0.25)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(255,66,66,0.12)";
+                    }}
+                  >
+                    <XCircle size={18} weight="bold" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </>
