@@ -253,17 +253,14 @@ export default function AdminDashboardPage() {
         delay={0.7}
       />
 
-      {/* Bottom Row: System Status + Quick Actions + Today's Activity + Retention */}
+      {/* Bottom Row: System Status + Quick Actions + Today's Activity */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+        gridTemplateColumns: "1fr 1fr 1fr",
         gap: 14,
       }}>
         <style>{`
           @media (max-width: 1024px) {
-            .admin-bottom-grid { grid-template-columns: 1fr 1fr !important; }
-          }
-          @media (max-width: 640px) {
             .admin-bottom-grid { grid-template-columns: 1fr !important; }
           }
         `}</style>
@@ -283,16 +280,16 @@ export default function AdminDashboardPage() {
           pendingReports={d.pending_reports}
           delay={1.0}
         />
-        {retentionData && (
-          <RetentionWidget
-            avgScore={retentionData.avg_score}
-            totalScoredUsers={retentionData.total_scored_users}
-            riskDistribution={retentionData.risk_distribution}
-            activeStreaks={retentionData.active_streaks}
-            delay={1.1}
-          />
-        )}
       </div>
+
+      {/* Retention Widget — Full Width */}
+      <RetentionWidget
+        avgScore={retentionData?.avg_score ?? 0}
+        totalScoredUsers={retentionData?.total_scored_users ?? 0}
+        riskDistribution={retentionData?.risk_distribution ?? {}}
+        activeStreaks={retentionData?.active_streaks ?? 0}
+        delay={1.1}
+      />
 
       {/* Footer timestamp */}
       <div style={{
