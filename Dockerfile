@@ -14,7 +14,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:7359
+ARG NEXT_PUBLIC_API_URL=https://shareplay.spinwish.tech
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ENV NODE_OPTIONS="--max-old-space-size=2048"
