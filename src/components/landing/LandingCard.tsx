@@ -1,19 +1,60 @@
 "use client";
 
-import { useReducedMotion, motion } from "framer-motion";
+import { useRef, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import gsap from "gsap";
 
 export function LandingCard() {
-  const reducedMotion = useReducedMotion();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
+  const taglineRef = useRef<HTMLParagraphElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const aboutRef = useRef<HTMLParagraphElement>(null);
 
-  function anim(delay: number, extra?: Record<string, unknown>) {
-    if (reducedMotion) return {};
-    return {
-      initial: { opacity: 0, ...extra },
-      animate: { opacity: 1, y: 0, scale: 1 },
-      transition: { duration: 0.5, delay, ease: "easeOut" as const },
+  useEffect(() => {
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (prefersReduced) return;
+
+    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+    tl.fromTo(
+      cardRef.current,
+      { opacity: 0, y: 24 },
+      { opacity: 1, y: 0, duration: 0.6 },
+      0.2
+    )
+      .fromTo(
+        logoRef.current,
+        { opacity: 0, scale: 0.8 },
+        { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.7)" },
+        0.4
+      )
+      .fromTo(
+        taglineRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.5 },
+        0.55
+      )
+      .fromTo(
+        ctaRef.current,
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.5 },
+        0.65
+      )
+      .fromTo(
+        aboutRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.5 },
+        0.75
+      );
+
+    return () => {
+      tl.kill();
     };
-  }
+  }, []);
 
   return (
     <div
@@ -27,8 +68,8 @@ export function LandingCard() {
         padding: "20px",
       }}
     >
-      <motion.div
-        {...anim(0.2, { y: 24 })}
+      <div
+        ref={cardRef}
         className="landing-card"
         style={{
           width: "100%",
@@ -45,23 +86,11 @@ export function LandingCard() {
           flexDirection: "column" as const,
           alignItems: "center",
           gap: "20px",
+          opacity: 0,
         }}
       >
         {/* Logo */}
-        <motion.div
-          initial={reducedMotion ? undefined : { opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={
-            reducedMotion
-              ? undefined
-              : {
-                  delay: 0.4,
-                  type: "spring",
-                  stiffness: 200,
-                  damping: 15,
-                }
-          }
-        >
+        <div ref={logoRef} style={{ opacity: 0 }}>
           <Image
             src="/logo.png"
             alt="SharePlay"
@@ -70,26 +99,27 @@ export function LandingCard() {
             priority
             style={{ objectFit: "contain" }}
           />
-        </motion.div>
+        </div>
 
         {/* Tagline */}
-        <motion.p
-          {...anim(0.55)}
+        <p
+          ref={taglineRef}
           style={{
             fontFamily: "var(--font-inter), sans-serif",
             fontSize: "16px",
             color: "#888",
             textAlign: "center",
             lineHeight: 1.5,
+            opacity: 0,
           }}
         >
           Watch together. Listen together.
-        </motion.p>
+        </p>
 
         {/* CTA Button */}
-        <motion.div
-          {...anim(0.65, { y: 12 })}
-          style={{ width: "100%", marginTop: "4px" }}
+        <div
+          ref={ctaRef}
+          style={{ width: "100%", marginTop: "4px", opacity: 0 }}
         >
           <a
             href="/auth"
@@ -131,8 +161,33 @@ export function LandingCard() {
           >
             Get Started
           </a>
-        </motion.div>
-      </motion.div>
+        </div>
+
+        {/* About link */}
+        <p
+          ref={aboutRef}
+          style={{
+            fontFamily: "var(--font-inter), sans-serif",
+            fontSize: "14px",
+            color: "#888",
+            textAlign: "center",
+            lineHeight: 1.5,
+            opacity: 0,
+          }}
+        >
+          If you want to know more{" "}
+          <Link
+            href="/about"
+            style={{
+              color: "#ff3b3b",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            about Us click here
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

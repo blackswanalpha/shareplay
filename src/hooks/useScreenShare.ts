@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useAtomValue } from "jotai";
 import { screenShareAtom } from "@/store/roomAtoms";
 import type { SocketActions } from "./useSocket";
@@ -261,11 +261,8 @@ export function useScreenShare(
     };
   }, []);
 
-  return {
-    startSharing,
-    stopSharing,
-    remoteStream,
-    localStream,
-    isLocalSharing,
-  };
+  return useMemo(
+    () => ({ startSharing, stopSharing, remoteStream, localStream, isLocalSharing }),
+    [startSharing, stopSharing, remoteStream, localStream, isLocalSharing]
+  );
 }

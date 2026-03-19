@@ -15,6 +15,7 @@ import {
   playerStateAtom,
   audioStateAtom,
   screenShareAtom,
+  cameraShareAtom,
   syncStatusAtom,
   socketConnectedAtom,
   roomAtom,
@@ -47,9 +48,13 @@ export interface SocketActions {
   emitSpeaking: (isSpeaking: boolean) => void;
   startScreenShare: () => void;
   stopScreenShare: () => void;
+  sendCameraShareSignal: (targetUserId: string, signal: unknown) => void;
+  startCamera: () => void;
+  stopCamera: () => void;
   getStreamSocket: () => Socket | null;
   sendAnnouncement: (title: string, body: string, requiresAck?: boolean) => void;
   dismissAnnouncement: () => void;
+  addReaction: (messageId: string, emoji: string) => void;
 }
 
 export function useSocket(roomId: string): SocketActions {
@@ -61,6 +66,7 @@ export function useSocket(roomId: string): SocketActions {
   const setPlayerState = useSetAtom(playerStateAtom);
   const setAudioState = useSetAtom(audioStateAtom);
   const setScreenShare = useSetAtom(screenShareAtom);
+  const setCameraShare = useSetAtom(cameraShareAtom);
   const setSyncStatus = useSetAtom(syncStatusAtom);
   const setSocketConnected = useSetAtom(socketConnectedAtom);
   const setRoom = useSetAtom(roomAtom);
@@ -170,6 +176,7 @@ export function useSocket(roomId: string): SocketActions {
           is_speaking: false,
           is_deafened: false,
           is_screen_sharing: false,
+          is_camera_sharing: false,
         })));
       }
       // Sync state (current playback)
@@ -190,17 +197,26 @@ export function useSocket(roomId: string): SocketActions {
       apiGetChatHistory(roomId).then((history) => {
         if (cleaned) return;
         if (history && history.length > 0) {
-          const historyMsgs = history.map((m): ChatMessage => ({
-            id: String(m.id),
-            sender: {
-              id: String(m.user_id),
-              username: m.username,
-              avatar_url: resolveAvatarUrl(m.avatar_url ?? null, m.username),
-            },
-            text: m.content,
-            is_system: m.message_type === "system",
-            created_at: m.created_at,
-          }));
+          const historyMsgs = history.map((m): ChatMessage => {
+            const reactions: Record<string, string[]> = {};
+            if (m.reactions) {
+              for (const [emoji, userIds] of Object.entries(m.reactions)) {
+                reactions[emoji] = (userIds as number[]).map(String);
+              }
+            }
+            return {
+              id: String(m.id),
+              sender: {
+                id: String(m.user_id),
+                username: m.username,
+                avatar_url: resolveAvatarUrl(m.avatar_url ?? null, m.username),
+              },
+              text: m.content,
+              is_system: m.message_type === "system",
+              created_at: m.created_at,
+              reactions: Object.keys(reactions).length > 0 ? reactions : undefined,
+            };
+          });
           // Merge with any real-time messages that arrived before history loaded
           setMessages((prev) => {
             const historyIds = new Set(historyMsgs.map((m) => m.id));
@@ -272,6 +288,7 @@ export function useSocket(roomId: string): SocketActions {
           is_speaking: false,
           is_deafened: false,
           is_screen_sharing: false,
+          is_camera_sharing: false,
         }];
       });
     });
@@ -370,6 +387,19 @@ export function useSocket(roomId: string): SocketActions {
         is_system: true,
         created_at: data.created_at,
       }]);
+    });
+
+    chatSocket.on("reaction_updated", (data: { message_id: number; reactions: Record<string, number[]> }) => {
+      if (cleaned) return;
+      const converted: Record<string, string[]> = {};
+      for (const [emoji, userIds] of Object.entries(data.reactions)) {
+        converted[emoji] = userIds.map(String);
+      }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === String(data.message_id) ? { ...m, reactions: converted } : m
+        )
+      );
     });
 
     // --- /sync namespace ---
@@ -493,6 +523,32 @@ export function useSocket(roomId: string): SocketActions {
       setScreenShare({ isSharing: false, sharerUserId: null, sessionId: null });
     });
 
+    streamSocket.on("camera_started", (data: { user_id?: number; username?: string; viewer_user_ids?: string[] }) => {
+      if (cleaned) return;
+      const uid = data.user_id ? String(data.user_id) : null;
+      if (uid) {
+        setCameraShare((prev) => ({
+          sharerUserIds: prev.sharerUserIds.includes(uid) ? prev.sharerUserIds : [...prev.sharerUserIds, uid],
+        }));
+        setParticipants((prev) =>
+          prev.map((p) => p.id === uid ? { ...p, is_camera_sharing: true } : p)
+        );
+      }
+    });
+
+    streamSocket.on("camera_stopped", (data: { user_id?: number }) => {
+      if (cleaned) return;
+      const uid = data.user_id ? String(data.user_id) : null;
+      if (uid) {
+        setCameraShare((prev) => ({
+          sharerUserIds: prev.sharerUserIds.filter((id) => id !== uid),
+        }));
+        setParticipants((prev) =>
+          prev.map((p) => p.id === uid ? { ...p, is_camera_sharing: false } : p)
+        );
+      }
+    });
+
     // Connect all
     roomSocket.connect();
     chatSocket.connect();
@@ -515,6 +571,8 @@ export function useSocket(roomId: string): SocketActions {
       audioSocket.removeAllListeners();
       streamSocket.off("screen_share_started");
       streamSocket.off("screen_share_stopped");
+      streamSocket.off("camera_started");
+      streamSocket.off("camera_stopped");
       streamSocket.removeAllListeners();
       roomSocket.disconnect();
       chatSocket.disconnect();
@@ -542,13 +600,14 @@ export function useSocket(roomId: string): SocketActions {
       });
       setAudioState({ isMuted: false, isDeafened: false, isInAudio: false });
       setScreenShare({ isSharing: false, sharerUserId: null, sessionId: null });
+      setCameraShare({ sharerUserIds: [] });
       setSyncStatus("synced");
       setSocketConnected(false);
       setAnnouncement(null);
       setAlerts([]);
       setServiceStatus(null);
     };
-  }, [roomId, setParticipants, setMessages, setQueue, setCurrentTrackId, setPendingUsers, setPlayerState, setAudioState, setScreenShare, setSyncStatus, setSocketConnected, setRoom, setRoomEnded, setAnnouncement, setAlerts, setServiceStatus]);
+  }, [roomId, setParticipants, setMessages, setQueue, setCurrentTrackId, setPendingUsers, setPlayerState, setAudioState, setScreenShare, setCameraShare, setSyncStatus, setSocketConnected, setRoom, setRoomEnded, setAnnouncement, setAlerts, setServiceStatus]);
 
   const sendMessage = useCallback((text: string) => {
     const chat = socketsRef.current?.chat;
@@ -629,15 +688,15 @@ export function useSocket(roomId: string): SocketActions {
   }, [roomId, setAudioState]);
 
   const addToPlaylist = useCallback((url: string) => {
-    socketsRef.current?.sync.emit("add_to_playlist", { room_code: roomId, url });
+    socketsRef.current?.sync.emit("playlist_add", { room_code: roomId, url });
   }, [roomId]);
 
   const votePlaylistItem = useCallback((trackId: string, vote: "up" | "down") => {
-    socketsRef.current?.sync.emit("vote_playlist_item", { room_code: roomId, track_id: trackId, vote });
+    socketsRef.current?.sync.emit("playlist_vote", { room_code: roomId, item_id: trackId, vote: vote === "up" ? 1 : -1 });
   }, [roomId]);
 
   const skipTrack = useCallback(() => {
-    socketsRef.current?.sync.emit("skip_track", { room_code: roomId });
+    socketsRef.current?.sync.emit("playlist_skip", { room_code: roomId });
   }, [roomId]);
 
   const approveJoin = useCallback((userId: string) => {
@@ -700,6 +759,22 @@ export function useSocket(roomId: string): SocketActions {
     setScreenShare((prev) => ({ ...prev, isSharing: false, sharerUserId: null, sessionId: null }));
   }, [roomId, setScreenShare]);
 
+  const sendCameraShareSignal = useCallback((targetUserId: string, signal: unknown) => {
+    socketsRef.current?.stream.emit("camera_share_signal", {
+      room_code: roomId,
+      target_user_id: targetUserId,
+      signal,
+    });
+  }, [roomId]);
+
+  const startCamera = useCallback(() => {
+    socketsRef.current?.stream.emit("start_camera", { room_code: roomId });
+  }, [roomId]);
+
+  const stopCamera = useCallback(() => {
+    socketsRef.current?.stream.emit("stop_camera", { room_code: roomId });
+  }, [roomId]);
+
   const getStreamSocket = useCallback(() => {
     return socketsRef.current?.stream || null;
   }, []);
@@ -714,6 +789,12 @@ export function useSocket(roomId: string): SocketActions {
 
   const dismissAnnouncement = useCallback(() => {
     socketsRef.current?.room.emit("dismiss_announcement", {});
+  }, []);
+
+  const addReaction = useCallback((messageId: string, emoji: string) => {
+    const chat = socketsRef.current?.chat;
+    if (!chat?.connected) return;
+    chat.emit("add_reaction", { message_id: Number(messageId), emoji });
   }, []);
 
   return {
@@ -737,8 +818,12 @@ export function useSocket(roomId: string): SocketActions {
     emitSpeaking,
     startScreenShare,
     stopScreenShare,
+    sendCameraShareSignal,
+    startCamera,
+    stopCamera,
     getStreamSocket,
     sendAnnouncement,
     dismissAnnouncement,
+    addReaction,
   };
 }

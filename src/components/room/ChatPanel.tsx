@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PaperPlaneTilt } from "@phosphor-icons/react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { messagesAtom, chatInputAtom } from "@/store/roomAtoms";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SocketActions } from "@/hooks/useSocket";
+import { ReactionFloatingButton, ChatInputEmojiPicker } from "./EmojiReactionPicker";
 
 interface ChatPanelProps {
   actions: SocketActions;
@@ -17,6 +18,8 @@ export function ChatPanel({ actions }: ChatPanelProps) {
   const setChatInput = useSetAtom(chatInputAtom);
   const { user } = useAuth();
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (listRef.current) {
@@ -41,6 +44,13 @@ export function ChatPanel({ actions }: ChatPanelProps) {
     const d = new Date(iso);
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
+
+  const handleReaction = useCallback(
+    (msgId: string, emoji: string) => {
+      actions.addReaction(msgId, emoji);
+    },
+    [actions]
+  );
 
   return (
     <div
@@ -97,8 +107,12 @@ export function ChatPanel({ actions }: ChatPanelProps) {
                 flexDirection: "column",
                 gap: 4,
                 alignItems: msg.sender.id === user?.id ? "flex-end" : "flex-start",
+                position: "relative",
               }}
+              onMouseEnter={() => setHoveredMsgId(msg.id)}
+              onMouseLeave={() => setHoveredMsgId(null)}
             >
+
               <div
                 style={{
                   display: "flex",
@@ -127,28 +141,94 @@ export function ChatPanel({ actions }: ChatPanelProps) {
                   {formatTime(msg.created_at)}
                 </span>
               </div>
-              <p
+              <div
                 style={{
-                  fontSize: 14,
-                  color: "#ddd",
-                  fontFamily: "var(--font-inter), sans-serif",
-                  lineHeight: 1.5,
-                  wordBreak: "break-word",
-                  padding: "10px 14px",
-                  background: msg.sender.id === user?.id
-                    ? "rgba(255,66,66,0.15)"
-                    : "rgba(255,255,255,0.05)",
-                  border: msg.sender.id === user?.id
-                    ? "1px solid rgba(255,66,66,0.2)"
-                    : "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 12,
-                  borderTopLeftRadius: msg.sender.id === user?.id ? 12 : 2,
-                  borderTopRightRadius: msg.sender.id === user?.id ? 2 : 12,
-                  maxWidth: "85%",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: 6,
+                  maxWidth: "90%",
+                  flexDirection: msg.sender.id === user?.id ? "row-reverse" : "row",
                 }}
               >
-                {msg.text}
-              </p>
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: "#ddd",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    lineHeight: 1.5,
+                    wordBreak: "break-word",
+                    padding: "10px 14px",
+                    background: msg.sender.id === user?.id
+                      ? "rgba(255,66,66,0.15)"
+                      : "rgba(255,255,255,0.05)",
+                    border: msg.sender.id === user?.id
+                      ? "1px solid rgba(255,66,66,0.2)"
+                      : "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                    borderTopLeftRadius: msg.sender.id === user?.id ? 12 : 2,
+                    borderTopRightRadius: msg.sender.id === user?.id ? 2 : 12,
+                    flex: "0 1 auto",
+                    minWidth: 0,
+                  }}
+                >
+                  {msg.text}
+                </p>
+                <div
+                  style={{
+                    opacity: hoveredMsgId === msg.id ? 1 : 0,
+                    transition: "opacity 0.15s ease",
+                    pointerEvents: hoveredMsgId === msg.id ? "auto" : "none",
+                  }}
+                >
+                  <ReactionFloatingButton
+                    onSelect={(emoji) => handleReaction(msg.id, emoji)}
+                  />
+                </div>
+              </div>
+
+              {/* Reaction pills */}
+              {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    maxWidth: "85%",
+                  }}
+                >
+                  {Object.entries(msg.reactions).map(([emoji, userIds]) => {
+                    const isActive = user?.id ? userIds.includes(user.id) : false;
+                    return (
+                      <button
+                        key={emoji}
+                        onClick={() => handleReaction(msg.id, emoji)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "2px 8px",
+                          borderRadius: 12,
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                          cursor: "pointer",
+                          background: isActive
+                            ? "rgba(255,66,66,0.15)"
+                            : "rgba(255,255,255,0.05)",
+                          border: isActive
+                            ? "1px solid rgba(255,66,66,0.3)"
+                            : "1px solid rgba(255,255,255,0.1)",
+                          color: "#ddd",
+                          fontFamily: "var(--font-inter), sans-serif",
+                          transition: "background 0.15s, border-color 0.15s",
+                        }}
+                      >
+                        <span style={{ fontSize: 8 }}>{emoji}</span>
+                        <span>{userIds.length}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )
         )}
@@ -165,6 +245,7 @@ export function ChatPanel({ actions }: ChatPanelProps) {
       >
         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
           <input
+            ref={inputRef}
             type="text"
             placeholder="Type a message..."
             value={chatInput}
@@ -172,7 +253,7 @@ export function ChatPanel({ actions }: ChatPanelProps) {
             onKeyDown={handleKeyDown}
             style={{
               width: "100%",
-              padding: "12px 48px 12px 16px",
+              padding: "12px 84px 12px 16px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: 12,
@@ -189,25 +270,38 @@ export function ChatPanel({ actions }: ChatPanelProps) {
               e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
             }}
           />
-          <button
-            onClick={handleSend}
-            aria-label="Send message"
+          <div
             style={{
               position: "absolute",
-              right: 8,
+              right: 4,
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              padding: 8,
-              background: "none",
-              border: "none",
-              color: chatInput.trim() ? "#ff4242" : "#555",
-              cursor: chatInput.trim() ? "pointer" : "default",
-              transition: "color 0.2s ease",
             }}
           >
-            <PaperPlaneTilt size={20} />
-          </button>
+            <ChatInputEmojiPicker
+              onSelect={(emoji) => {
+                setChatInput((prev) => prev + emoji);
+                inputRef.current?.focus();
+              }}
+            />
+            <button
+              onClick={handleSend}
+              aria-label="Send message"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 8,
+                background: "none",
+                border: "none",
+                color: chatInput.trim() ? "#ff4242" : "#555",
+                cursor: chatInput.trim() ? "pointer" : "default",
+                transition: "color 0.2s ease",
+              }}
+            >
+              <PaperPlaneTilt size={20} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

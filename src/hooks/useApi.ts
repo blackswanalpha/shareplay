@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   apiGetRooms,
@@ -120,7 +121,10 @@ export function useDashboardStats() {
   const { data: sessions } = useSessions();
   const { data: friends } = useFriends();
 
-  return computeStats(rooms || [], sessions || [], friends || []);
+  return useMemo(
+    () => computeStats(rooms || [], sessions || [], friends || []),
+    [rooms, sessions, friends]
+  );
 }
 
 export function useSearchUsers(query: string) {

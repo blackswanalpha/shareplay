@@ -26,6 +26,7 @@ export const mockUser: User = {
   email: "alex@shareplay.app",
   avatar_url: avatar("Alex"),
   is_online: true,
+  is_admin: false,
   is_email_verified: true,
   created_at: "2025-06-15T10:00:00Z",
 };
@@ -267,6 +268,7 @@ export const mockRoomParticipants: RoomParticipant[] = [
     is_speaking: false,
     is_deafened: false,
     is_screen_sharing: false,
+    is_camera_sharing: false,
   },
   {
     id: "u2",
@@ -278,6 +280,7 @@ export const mockRoomParticipants: RoomParticipant[] = [
     is_speaking: true,
     is_deafened: false,
     is_screen_sharing: false,
+    is_camera_sharing: false,
   },
   {
     id: "u3",
@@ -289,6 +292,7 @@ export const mockRoomParticipants: RoomParticipant[] = [
     is_speaking: false,
     is_deafened: false,
     is_screen_sharing: false,
+    is_camera_sharing: false,
   },
   {
     id: "u4",
@@ -300,6 +304,7 @@ export const mockRoomParticipants: RoomParticipant[] = [
     is_speaking: false,
     is_deafened: true,
     is_screen_sharing: false,
+    is_camera_sharing: false,
   },
   {
     id: "u5",
@@ -311,6 +316,7 @@ export const mockRoomParticipants: RoomParticipant[] = [
     is_speaking: false,
     is_deafened: false,
     is_screen_sharing: false,
+    is_camera_sharing: false,
   },
 ];
 
@@ -451,6 +457,7 @@ export const mockRoomStateMusic: RoomState = {
       is_speaking: false,
       is_deafened: false,
       is_screen_sharing: false,
+      is_camera_sharing: false,
     },
     {
       id: "u6",
@@ -462,6 +469,7 @@ export const mockRoomStateMusic: RoomState = {
       is_speaking: true,
       is_deafened: false,
       is_screen_sharing: false,
+      is_camera_sharing: false,
     },
     {
       id: "u7",
@@ -473,6 +481,7 @@ export const mockRoomStateMusic: RoomState = {
       is_speaking: false,
       is_deafened: false,
       is_screen_sharing: false,
+      is_camera_sharing: false,
     },
   ],
   messages: [
@@ -519,6 +528,7 @@ export function getRoomStateById(id: string): RoomState | null {
           is_speaking: false,
           is_deafened: false,
           is_screen_sharing: false,
+          is_camera_sharing: false,
         },
       ],
       messages: [],

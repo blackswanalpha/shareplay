@@ -9,6 +9,7 @@ import {
   SkipForward,
   SpeakerHigh,
 } from "@phosphor-icons/react";
+import gsap from "gsap";
 import { playerStateAtom } from "@/store/roomAtoms";
 import type { SocketActions } from "@/hooks/useSocket";
 
@@ -38,6 +39,10 @@ export function MusicPlayer({ actions }: MusicPlayerProps) {
   const howlRef = useRef<InstanceType<typeof import("howler").Howl> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRemoteRef = useRef(false);
+
+  const albumArtRef = useRef<HTMLDivElement>(null);
+  const spinTweenRef = useRef<gsap.core.Tween | null>(null);
+  const glowTweenRef = useRef<gsap.core.Tween | null>(null);
 
   const { videoUrl, isPlaying, currentTime, title, subtitle, thumbnailUrl, duration, sequenceId } = playerState;
   const progress = duration > 0 ? (localTime / duration) * 100 : 0;
@@ -139,6 +144,48 @@ export function MusicPlayer({ actions }: MusicPlayerProps) {
     actions.emitSeek(seekTime);
   }, [duration, actions]);
 
+  // GSAP vinyl spin + glow pulse when playing
+  useEffect(() => {
+    const art = albumArtRef.current;
+    if (!art) return;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) return;
+
+    if (isPlaying) {
+      if (!spinTweenRef.current) {
+        spinTweenRef.current = gsap.to(art, {
+          rotation: "+=360",
+          duration: 8,
+          ease: "none",
+          repeat: -1,
+        });
+      } else {
+        spinTweenRef.current.resume();
+      }
+      if (!glowTweenRef.current) {
+        glowTweenRef.current = gsap.to(art, {
+          boxShadow: "0 8px 50px rgba(255,66,66,0.4)",
+          duration: 1.5,
+          ease: "sine.inOut",
+          yoyo: true,
+          repeat: -1,
+        });
+      } else {
+        glowTweenRef.current.resume();
+      }
+    } else {
+      spinTweenRef.current?.pause();
+      glowTweenRef.current?.pause();
+    }
+
+    return () => {
+      spinTweenRef.current?.kill();
+      spinTweenRef.current = null;
+      glowTweenRef.current?.kill();
+      glowTweenRef.current = null;
+    };
+  }, [isPlaying]);
+
   const handleNext = () => actions.skipTrack();
   const handlePrevious = () => {
     howlRef.current?.seek(0);
@@ -158,6 +205,7 @@ export function MusicPlayer({ actions }: MusicPlayerProps) {
       {/* Album art */}
       {thumbnailUrl ? (
         <div
+          ref={albumArtRef}
           style={{
             width: 280,
             height: 280,

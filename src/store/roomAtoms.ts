@@ -69,6 +69,12 @@ export const screenShareAtom = atom<ScreenShareState>({
   sessionId: null,
 });
 
+export interface CameraShareState {
+  sharerUserIds: string[];
+}
+
+export const cameraShareAtom = atom<CameraShareState>({ sharerUserIds: [] });
+
 // --- UI state atoms ---
 
 export const sidebarTabAtom = atom<string>("chat");

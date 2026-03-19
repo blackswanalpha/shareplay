@@ -4,6 +4,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useServiceStatus } from "@/hooks/useServiceStatus";
 import { useAtomValue } from "jotai";
 import { serviceStatusAtom } from "@/store/roomAtoms";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
 const priorityColors: Record<string, { bg: string; border: string; text: string }> = {
   low: { bg: "rgba(59, 130, 246, 0.12)", border: "rgba(59, 130, 246, 0.3)", text: "#93c5fd" },
@@ -46,21 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useServiceStatus();
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#000",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#888",
-          fontFamily: "var(--font-inter), sans-serif",
-        }}
-      >
-        Loading...
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!isAuthenticated) return null;

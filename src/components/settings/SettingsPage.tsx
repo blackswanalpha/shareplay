@@ -36,6 +36,41 @@ const AudioSettingsSection = dynamic(
   { ssr: false }
 );
 
+const VideoSettingsSection = dynamic(
+  () => import("./VideoSettingsSection").then((m) => m.VideoSettingsSection),
+  { ssr: false }
+);
+
+const AppearanceSection = dynamic(
+  () => import("./AppearanceSection").then((m) => m.AppearanceSection),
+  { ssr: false }
+);
+
+const KeyboardShortcutsSection = dynamic(
+  () => import("./KeyboardShortcutsSection").then((m) => m.KeyboardShortcutsSection),
+  { ssr: false }
+);
+
+const FeedbackSection = dynamic(
+  () => import("./FeedbackSection").then((m) => m.FeedbackSection),
+  { ssr: false }
+);
+
+const AboutSection = dynamic(
+  () => import("./AboutSection").then((m) => m.AboutSection),
+  { ssr: false }
+);
+
+const HelpSupportSection = dynamic(
+  () => import("./HelpSupportSection").then((m) => m.HelpSupportSection),
+  { ssr: false }
+);
+
+const FAQSection = dynamic(
+  () => import("./FAQSection").then((m) => m.FAQSection),
+  { ssr: false }
+);
+
 function PlaceholderSection({ title }: { title: string }) {
   return (
     <div>
@@ -104,12 +139,20 @@ export function SettingsPage() {
         return <NotificationPreferencesSection />;
       case "audio":
         return <AudioSettingsSection />;
+      case "video":
+        return <VideoSettingsSection />;
       case "appearance":
-        return <PlaceholderSection title="Appearance" />;
-      case "privacy":
-        return <PlaceholderSection title="Privacy" />;
+        return <AppearanceSection />;
       case "shortcuts":
-        return <PlaceholderSection title="Keyboard Shortcuts" />;
+        return <KeyboardShortcutsSection />;
+      case "feedback":
+        return <FeedbackSection />;
+      case "about":
+        return <AboutSection />;
+      case "help":
+        return <HelpSupportSection onNavigateToSection={setActiveSection} />;
+      case "faq":
+        return <FAQSection onNavigateToSection={setActiveSection} />;
       default:
         return <ProfileSection />;
     }

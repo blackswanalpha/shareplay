@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Plus } from "@phosphor-icons/react";
-import { motion, useReducedMotion } from "framer-motion";
+import gsap from "gsap";
+import { WorldClock } from "./WorldClock";
 
 interface DashboardHeroProps {
   username: string;
@@ -12,34 +13,80 @@ interface DashboardHeroProps {
 
 export function DashboardHero({ username, onCreateRoom, onJoinRoom }: DashboardHeroProps) {
   const [roomCode, setRoomCode] = useState("");
-  const reducedMotion = useReducedMotion();
+  const sectionRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (prefersReduced) return;
+
+    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+    tl.fromTo(
+      headingRef.current,
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.5 }
+    ).fromTo(
+      actionsRef.current,
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.4 },
+      "-=0.25"
+    );
+
+    return () => { tl.kill(); };
+  }, []);
 
   return (
-    <motion.section
-      initial={reducedMotion ? undefined : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={reducedMotion ? undefined : { duration: 0.4 }}
-      style={{ marginBottom: 32 }}
-    >
-      <h1
+    <section ref={sectionRef} style={{ marginBottom: 32 }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .dashboard-hero-row {
+            justify-content: center !important;
+            text-align: center;
+          }
+          .dashboard-hero-row h1 {
+            width: 100%;
+          }
+        }
+      `}</style>
+      <div
+        className="dashboard-hero-row"
         style={{
-          fontFamily: "var(--font-space-grotesk), sans-serif",
-          fontSize: "clamp(24px, 4vw, 36px)",
-          fontWeight: 700,
-          color: "#f5f5f5",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           marginBottom: 24,
+          flexWrap: "wrap",
+          gap: 16,
         }}
       >
-        Welcome back,{" "}
-        <span style={{ color: "#ff3b3b" }}>{username}</span>
-      </h1>
+        <h1
+          ref={headingRef}
+          style={{
+            fontFamily: "var(--font-space-grotesk), sans-serif",
+            fontSize: "clamp(24px, 4vw, 36px)",
+            fontWeight: 700,
+            color: "#f5f5f5",
+            margin: 0,
+            opacity: 0,
+          }}
+        >
+          Welcome back,{" "}
+          <span style={{ color: "#ff3b3b" }}>{username}</span>
+        </h1>
+        <WorldClock />
+      </div>
 
       <div
+        ref={actionsRef}
         style={{
           display: "flex",
           flexWrap: "wrap",
           gap: 12,
           alignItems: "center",
+          opacity: 0,
         }}
       >
         <button
@@ -138,6 +185,6 @@ export function DashboardHero({ username, onCreateRoom, onJoinRoom }: DashboardH
           </button>
         </div>
       </div>
-    </motion.section>
+    </section>
   );
 }

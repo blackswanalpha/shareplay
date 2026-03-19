@@ -4,6 +4,7 @@ export interface User {
   email: string;
   avatar_url: string;
   is_online: boolean;
+  is_admin: boolean;
   is_email_verified: boolean;
   created_at: string;
 }
@@ -112,6 +113,7 @@ export interface RoomParticipant extends Participant {
   is_speaking: boolean;
   is_deafened: boolean;
   is_screen_sharing: boolean;
+  is_camera_sharing: boolean;
 }
 
 export interface ChatMessage {
@@ -120,6 +122,7 @@ export interface ChatMessage {
   text: string;
   is_system?: boolean;
   created_at: string;
+  reactions?: Record<string, string[]>;
 }
 
 export interface QueueTrack {
@@ -278,6 +281,41 @@ export interface AudioParticipantState {
   isMuted: boolean;
   isSpeaking: boolean;
   isDeafened: boolean;
+}
+
+// --- Appearance Settings ---
+
+export type ThemeMode = "dark" | "light" | "system";
+export type AccentColor = "red" | "blue" | "green" | "purple" | "orange";
+export type FontSize = "small" | "medium" | "large";
+
+export interface AppearanceSettings {
+  theme_mode: ThemeMode;
+  accent_color: AccentColor;
+  font_size: FontSize;
+  reduced_motion: boolean;
+  compact_mode: boolean;
+}
+
+// --- Keyboard Shortcuts ---
+
+export interface KeyboardShortcut {
+  id: string;
+  action: string;
+  description: string;
+  keys: string[];
+  category: "general" | "navigation" | "room_controls" | "chat";
+}
+
+// --- Feedback ---
+
+export type FeedbackType = "bug" | "feature" | "general";
+
+export interface FeedbackFormData {
+  type: FeedbackType;
+  rating: number;
+  message: string;
+  email: string;
 }
 
 // --- Broadcast types ---

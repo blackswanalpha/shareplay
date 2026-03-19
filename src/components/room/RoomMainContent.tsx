@@ -3,12 +3,14 @@
 import { useContext } from "react";
 import dynamic from "next/dynamic";
 import { useAtomValue } from "jotai";
-import { roomAtom, playerStateAtom, participantsAtom, screenShareAtom } from "@/store/roomAtoms";
+import { roomAtom, playerStateAtom, participantsAtom, screenShareAtom, cameraShareAtom } from "@/store/roomAtoms";
 import { AvatarGroup } from "@/components/ui/AvatarGroup";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import type { SocketActions } from "@/hooks/useSocket";
-import { ScreenShareContext } from "./RoomPage";
+import { ScreenShareContext, CameraShareContext } from "./RoomPage";
 import { ScreenShareViewer } from "./ScreenShareViewer";
+import { CameraGrid } from "./CameraGrid";
+import { useAuth } from "@/providers/AuthProvider";
 
 const VideoPlayer = dynamic(
   () => import("./VideoPlayer").then((m) => m.VideoPlayer),
@@ -34,8 +36,15 @@ export function RoomMainContent({ actions }: RoomMainContentProps) {
   const playerState = useAtomValue(playerStateAtom);
   const participants = useAtomValue(participantsAtom);
   const screenShare = useAtomValue(screenShareAtom);
+  const cameraShare = useAtomValue(cameraShareAtom);
   const { remoteStream, localStream, isLocalSharing, stopSharing } = useContext(ScreenShareContext);
+  const {
+    localStream: cameraLocalStream,
+    remoteStreams: cameraRemoteStreams,
+    isLocalSharing: isCameraSharing,
+  } = useContext(CameraShareContext);
   const { canSubmitMedia } = useCurrentRole();
+  const { user } = useAuth();
 
   const playerMode = room?.type ?? "watch";
   const onlineParticipants = participants.filter((p) => p.is_online);
@@ -62,6 +71,17 @@ export function RoomMainContent({ actions }: RoomMainContentProps) {
         <YouTubeUrlBar
           onPlayNow={handlePlayNow}
           onAddToQueue={handleAddToQueue}
+        />
+      )}
+
+      {/* Camera Grid */}
+      {(isCameraSharing || cameraRemoteStreams.size > 0) && (
+        <CameraGrid
+          localStream={cameraLocalStream}
+          remoteStreams={cameraRemoteStreams}
+          isLocalSharing={isCameraSharing}
+          participants={participants}
+          currentUserId={user?.id ?? null}
         />
       )}
 

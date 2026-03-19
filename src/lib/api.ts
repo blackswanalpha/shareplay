@@ -270,7 +270,7 @@ export function apiGetRoomParticipants(
 
 export function apiGetChatHistory(
   code: string
-): Promise<Array<{ id: number; user_id: number; username: string; avatar_url: string | null; content: string; message_type: string; created_at: string }>> {
+): Promise<Array<{ id: number; user_id: number; username: string; avatar_url: string | null; content: string; message_type: string; reactions: Record<string, number[]>; created_at: string }>> {
   return apiFetch(`/chat/${code}/history`);
 }
 

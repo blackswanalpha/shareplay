@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useEffect } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { RoomSkeleton } from "./RoomSkeleton";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useSetAtom, useAtomValue } from "jotai";
@@ -11,6 +12,8 @@ import { adaptRoom } from "@/lib/adapters";
 import { useSocket } from "@/hooks/useSocket";
 import { useScreenShare } from "@/hooks/useScreenShare";
 import type { UseScreenShareReturn } from "@/hooks/useScreenShare";
+import { useCameraShare } from "@/hooks/useCameraShare";
+import type { UseCameraShareReturn } from "@/hooks/useCameraShare";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import {
   roomAtom,
@@ -25,6 +28,14 @@ export const ScreenShareContext = createContext<UseScreenShareReturn>({
   remoteStream: null,
   localStream: null,
   isLocalSharing: false,
+});
+
+export const CameraShareContext = createContext<UseCameraShareReturn>({
+  startCamera: async () => {},
+  stopCamera: () => {},
+  localStream: null,
+  isLocalSharing: false,
+  remoteStreams: new Map(),
 });
 
 export interface VoiceChatContextValue {
@@ -61,6 +72,16 @@ const VoiceBar = dynamic(
 
 const BroadcastBanner = dynamic(
   () => import("./BroadcastBanner").then((m) => m.BroadcastBanner),
+  { ssr: false }
+);
+
+const WelcomeModal = dynamic(
+  () => import("./WelcomeModal").then((m) => m.WelcomeModal),
+  { ssr: false }
+);
+
+const HostLeaveModal = dynamic(
+  () => import("./HostLeaveModal").then((m) => m.HostLeaveModal),
   { ssr: false }
 );
 
@@ -166,6 +187,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const socketConnected = useAtomValue(socketConnectedAtom);
   const roomEnded = useAtomValue(roomEndedAtom);
   const setRoomEnded = useSetAtom(roomEndedAtom);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [showHostLeave, setShowHostLeave] = useState(false);
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -178,6 +201,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   useEffect(() => {
     setRoomEnded(null);
   }, [roomId, setRoomEnded]);
+
+  // Prefetch dashboard route for fast "Back" navigation
+  useEffect(() => {
+    router.prefetch("/dashboard");
+  }, [router]);
 
   // Initial room validation via REST
   const { isLoading: roomLoading, error: roomError, data: apiRoom } = useQuery({
@@ -195,29 +223,30 @@ export function RoomPage({ roomId }: RoomPageProps) {
   // Socket.IO connection — populates all atoms
   const actions = useSocket(roomId);
   const screenShareHook = useScreenShare(actions, user?.id ?? null);
+  const cameraShareHook = useCameraShare(actions, user?.id ?? null);
   const { joinVoice, leaveVoice, isInVoice } = useWebRTC(actions);
+
+  const voiceChatValue = useMemo(
+    () => ({ joinVoice, leaveVoice, isInVoice }),
+    [joinVoice, leaveVoice, isInVoice]
+  );
+
+  const isHost = user?.id === apiRoom?.host_id?.toString();
 
   const handleBack = () => {
     router.push("/dashboard");
   };
 
+  const handleLeaveIntent = () => {
+    if (isHost) {
+      setShowHostLeave(true);
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
   if (authLoading || !isAuthenticated) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0a0505",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#888",
-          fontSize: 16,
-          fontFamily: "var(--font-space-grotesk), sans-serif",
-        }}
-      >
-        Loading...
-      </div>
-    );
+    return <RoomSkeleton />;
   }
 
   // Room ended mid-session (host left, kicked, etc.)
@@ -226,24 +255,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   if (roomLoading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0a0505",
-          backgroundImage: "radial-gradient(circle, rgba(255,66,66,0.05) 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#888",
-          fontSize: 16,
-          fontFamily: "var(--font-space-grotesk), sans-serif",
-        }}
-      >
-        Loading room...
-      </div>
-    );
+    return <RoomSkeleton />;
   }
 
   if (roomError || !apiRoom) {
@@ -251,8 +263,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   return (
-    <VoiceChatContext.Provider value={{ joinVoice, leaveVoice, isInVoice }}>
+    <VoiceChatContext.Provider value={voiceChatValue}>
     <ScreenShareContext.Provider value={screenShareHook}>
+    <CameraShareContext.Provider value={cameraShareHook}>
       <div
         style={{
           height: "100vh",
@@ -264,14 +277,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
         }}
       >
         <RoomHeader
-          onBack={() => router.push("/dashboard")}
-          onLeave={handleBack}
+          onBack={handleLeaveIntent}
+          onLeave={handleLeaveIntent}
           actions={actions}
         />
 
         <BroadcastBanner
           actions={actions}
-          isHost={user?.id === apiRoom?.host_id?.toString()}
+          isHost={!!isHost}
         />
 
         <div
@@ -295,7 +308,25 @@ export function RoomPage({ roomId }: RoomPageProps) {
           userAvatar={user?.avatar_url ?? ""}
           actions={actions}
         />
+
+        {room && (
+          <WelcomeModal
+            open={showWelcome}
+            room={room}
+            onClose={() => setShowWelcome(false)}
+          />
+        )}
+
+        <HostLeaveModal
+          open={showHostLeave}
+          onClose={() => setShowHostLeave(false)}
+          onConfirm={() => {
+            setShowHostLeave(false);
+            router.push("/dashboard");
+          }}
+        />
       </div>
+    </CameraShareContext.Provider>
     </ScreenShareContext.Provider>
     </VoiceChatContext.Provider>
   );

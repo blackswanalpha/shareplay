@@ -7,11 +7,12 @@ export function useCurrentRole() {
   const participants = useAtomValue(participantsAtom);
   const role = participants.find((p) => p.id === user?.id)?.role;
   const isHostOrCoHost = role === "host" || role === "co-host";
+  const canInteract = (role as string) !== "viewer" && role !== undefined;
 
   return {
     role,
     currentUserId: user?.id ?? null,
-    canSubmitMedia: isHostOrCoHost,
+    canSubmitMedia: canInteract,
     canManageJoinRequests: isHostOrCoHost,
     canManageRoles: isHostOrCoHost,
     canTransferHost: role === "host",

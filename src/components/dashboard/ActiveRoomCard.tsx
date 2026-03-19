@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { AvatarGroup } from "@/components/ui/AvatarGroup";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -60,8 +61,11 @@ export function ActiveRoomCard({ room, onOpen }: ActiveRoomCardProps) {
         </div>
 
         <div style={{ marginTop: "auto" }}>
-          <button
+          <Link
+            href={`/room/${room.code}`}
+            onClick={() => onOpen?.(room.code)}
             style={{
+              display: "block",
               width: "100%",
               padding: "8px 16px",
               background: room.is_live ? "#ff3b3b" : "rgba(255,255,255,0.04)",
@@ -75,6 +79,9 @@ export function ActiveRoomCard({ room, onOpen }: ActiveRoomCardProps) {
                 : "1px solid rgba(255,255,255,0.08)",
               cursor: "pointer",
               transition: "all 0.2s ease",
+              textAlign: "center",
+              textDecoration: "none",
+              boxSizing: "border-box",
             }}
             onMouseEnter={(e) => {
               if (room.is_live) {
@@ -93,10 +100,9 @@ export function ActiveRoomCard({ room, onOpen }: ActiveRoomCardProps) {
                 e.currentTarget.style.background = "rgba(255,255,255,0.04)";
               }
             }}
-            onClick={() => onOpen?.(room.code)}
           >
             {room.is_live ? "Rejoin" : "Open"}
-          </button>
+          </Link>
         </div>
       </div>
     </GlassPanel>

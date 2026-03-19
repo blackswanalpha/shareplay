@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, useEffect } from "react";
 import {
   Microphone,
   MicrophoneSlash,
@@ -24,6 +25,41 @@ export function LobbyPreview({
   userAvatar,
   username,
 }: LobbyPreviewProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [camStream, setCamStream] = useState<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (camEnabled) {
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => {
+          setCamStream(stream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch(() => {
+          // Camera access denied or unavailable
+        });
+    } else {
+      if (camStream) {
+        camStream.getTracks().forEach((t) => t.stop());
+        setCamStream(null);
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camEnabled]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      camStream?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div
       style={{
@@ -77,28 +113,18 @@ export function LobbyPreview({
           </div>
         )}
         {camEnabled && (
-          <div
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
             style={{
               width: "100%",
               height: "100%",
-              background: "linear-gradient(135deg, #1a1a1a, #111)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              objectFit: "cover",
+              transform: "scaleX(-1)",
             }}
-          >
-            <img
-              src={userAvatar}
-              alt={username}
-              style={{
-                width: 120,
-                height: 120,
-                borderRadius: "50%",
-                background: "#222",
-                opacity: 0.6,
-              }}
-            />
-          </div>
+          />
         )}
       </div>
 

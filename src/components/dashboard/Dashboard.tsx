@@ -50,6 +50,11 @@ const QuickStats = dynamic(
   { ssr: false }
 );
 
+const AdSensePanel = dynamic(
+  () => import("./AdSensePanel").then((m) => m.AdSensePanel),
+  { ssr: false }
+);
+
 const CommandPalette = dynamic(
   () =>
     import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
@@ -158,7 +163,7 @@ export function Dashboard() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "1fr",
             gap: 24,
           }}
           className="dashboard-grid"
@@ -169,6 +174,7 @@ export function Dashboard() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <PendingInvites invites={invites} />
+            <AdSensePanel />
             <QuickStats stats={stats} />
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useRef, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   Microphone,
@@ -10,16 +10,57 @@ import {
   Screencast,
   Phone,
   PhoneDisconnect,
+  VideoCamera,
+  VideoCameraSlash,
 } from "@phosphor-icons/react";
+import gsap from "gsap";
 import {
   participantsAtom,
   audioStateAtom,
   speakingParticipantsAtom,
   screenShareAtom,
 } from "@/store/roomAtoms";
-import { ScreenShareContext, VoiceChatContext } from "./RoomPage";
+import { ScreenShareContext, CameraShareContext, VoiceChatContext } from "./RoomPage";
 import type { SocketActions } from "@/hooks/useSocket";
 import { toast } from "sonner";
+
+/* ─── GSAP-powered speaking waveform ─── */
+function SpeakingWave() {
+  const bar1 = useRef<HTMLDivElement>(null);
+  const bar2 = useRef<HTMLDivElement>(null);
+  const bar3 = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const bars = [bar1.current, bar2.current, bar3.current].filter(Boolean);
+    if (bars.length === 0) return;
+
+    const tl = gsap.timeline({ repeat: -1 });
+    tl.to(bars[0]!, { height: 12, duration: 0.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0)
+      .to(bars[1]!, { height: 4, duration: 0.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0.1)
+      .to(bars[2]!, { height: 10, duration: 0.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0.2);
+
+    return () => { tl.kill(); };
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: -4,
+        right: -4,
+        display: "flex",
+        gap: 1,
+        alignItems: "flex-end",
+      }}
+    >
+      <div ref={bar1} style={{ width: 2, height: 6, background: "#ff4242", borderRadius: 1 }} />
+      <div ref={bar2} style={{ width: 2, height: 10, background: "#ff4242", borderRadius: 1 }} />
+      <div ref={bar3} style={{ width: 2, height: 4, background: "#ff4242", borderRadius: 1 }} />
+    </div>
+  );
+}
+
+/* ─── Main VoiceBar ─── */
 
 interface VoiceBarProps {
   userAvatar: string;
@@ -34,8 +75,24 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
 
   const screenShare = useAtomValue(screenShareAtom);
   const { startSharing, stopSharing, isLocalSharing } = useContext(ScreenShareContext);
+  const { startCamera, stopCamera, isLocalSharing: isCameraOn } = useContext(CameraShareContext);
   const { joinVoice, leaveVoice, isInVoice } = useContext(VoiceChatContext);
   const onlineParticipants = participants.filter((p) => p.is_online);
+
+  const screenBtnRef = useRef<HTMLButtonElement>(null);
+
+  // GSAP screen-share pulse
+  useEffect(() => {
+    if (!isLocalSharing || !screenBtnRef.current) return;
+    const tween = gsap.to(screenBtnRef.current, {
+      boxShadow: "0 0 0 6px rgba(255,66,66,0)",
+      duration: 1,
+      ease: "sine.inOut",
+      yoyo: true,
+      repeat: -1,
+    });
+    return () => { tween.kill(); };
+  }, [isLocalSharing]);
 
   const handleToggleVoice = () => {
     if (isInVoice) {
@@ -69,6 +126,18 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
       return;
     }
     startSharing();
+  };
+
+  const handleToggleCamera = () => {
+    if (!audioState.isInAudio) {
+      toast("Join voice chat first", { description: "You need to be in voice chat to share your camera." });
+      return;
+    }
+    if (isCameraOn) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
   };
 
   const someoneElseSharing = screenShare.isSharing && !isLocalSharing;
@@ -125,23 +194,8 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
                     }}
                   />
                 </div>
-                {/* Speaking waveform indicator */}
-                {isSpeaking && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: -4,
-                      right: -4,
-                      display: "flex",
-                      gap: 1,
-                      alignItems: "flex-end",
-                    }}
-                  >
-                    <div style={{ width: 2, height: 6, background: "#ff4242", borderRadius: 1, animation: "wave1 0.8s ease-in-out infinite" }} />
-                    <div style={{ width: 2, height: 10, background: "#ff4242", borderRadius: 1, animation: "wave2 0.8s ease-in-out infinite 0.1s" }} />
-                    <div style={{ width: 2, height: 4, background: "#ff4242", borderRadius: 1, animation: "wave3 0.8s ease-in-out infinite 0.2s" }} />
-                  </div>
-                )}
+                {/* GSAP-powered speaking waveform */}
+                {isSpeaking && <SpeakingWave />}
               </div>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span
@@ -158,7 +212,7 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
                   style={{
                     fontSize: 10,
                     fontWeight: 700,
-                    color: isSpeaking ? "#ff4242" : p.is_muted ? "#555" : "#555",
+                    color: isSpeaking ? "#ff4242" : "#555",
                     fontFamily: "var(--font-inter), sans-serif",
                     textTransform: "uppercase",
                     letterSpacing: "-0.02em",
@@ -282,9 +336,40 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
           </>
         )}
 
+        <button
+          onClick={handleToggleCamera}
+          aria-label={isCameraOn ? "Stop camera" : "Start camera"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 40,
+            height: 40,
+            background: isCameraOn ? "rgba(255,66,66,0.2)" : "rgba(255,255,255,0.05)",
+            border: isCameraOn ? "1px solid rgba(255,66,66,0.3)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "50%",
+            color: isCameraOn ? "#ff4242" : "#fff",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = isCameraOn
+              ? "rgba(255,66,66,0.3)"
+              : "rgba(255,255,255,0.1)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = isCameraOn
+              ? "rgba(255,66,66,0.2)"
+              : "rgba(255,255,255,0.05)";
+          }}
+        >
+          {isCameraOn ? <VideoCameraSlash size={20} /> : <VideoCamera size={20} />}
+        </button>
+
         <div style={{ width: 1, height: 32, background: "rgba(255,255,255,0.1)", margin: "0 4px" }} />
 
         <button
+          ref={screenBtnRef}
           onClick={handleToggleScreenShare}
           aria-label={isLocalSharing ? "Stop screen share" : "Screen share"}
           style={{
@@ -305,7 +390,6 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
             color: isLocalSharing ? "#ff4242" : someoneElseSharing ? "#555" : "#fff",
             cursor: someoneElseSharing ? "not-allowed" : "pointer",
             transition: "all 0.2s ease",
-            animation: isLocalSharing ? "screen-share-pulse 2s ease-in-out infinite" : "none",
           }}
           onMouseEnter={(e) => {
             if (!someoneElseSharing) {
@@ -325,33 +409,6 @@ export function VoiceBar({ userAvatar, actions }: VoiceBarProps) {
           <Screencast size={20} />
         </button>
       </div>
-
-      {/* CSS animations for speaking waveform */}
-      <style>{`
-        @keyframes wave1 {
-          0%, 100% { height: 6px; }
-          50% { height: 12px; }
-        }
-        @keyframes wave2 {
-          0%, 100% { height: 10px; }
-          50% { height: 4px; }
-        }
-        @keyframes wave3 {
-          0%, 100% { height: 4px; }
-          50% { height: 8px; }
-        }
-        @keyframes animate-spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin {
-          animation: animate-spin 1s linear infinite;
-        }
-        @keyframes screen-share-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255,66,66,0.4); }
-          50% { box-shadow: 0 0 0 6px rgba(255,66,66,0); }
-        }
-      `}</style>
     </footer>
   );
 }

@@ -37,6 +37,7 @@ export function adaptUser(api: ApiUser): User {
     email: api.email,
     avatar_url: resolveAvatarUrl(api.avatar_url, api.username),
     is_online: api.is_active,
+    is_admin: api.is_admin,
     is_email_verified: api.is_email_verified,
     created_at: api.created_at,
   };

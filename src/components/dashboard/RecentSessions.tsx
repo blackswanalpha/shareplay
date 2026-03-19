@@ -1,13 +1,15 @@
 "use client";
 
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { ClockCounterClockwise } from "@phosphor-icons/react";
+import { ClockCounterClockwise, FilmStrip, MusicNote } from "@phosphor-icons/react";
 import type { Session } from "@/lib/types";
 
 function formatDuration(minutes: number): string {
+  if (minutes <= 0) return "< 1m";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (h > 0) return `${h}h ${m}m`;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
   return `${m}m`;
 }
 
@@ -87,8 +89,16 @@ export function RecentSessions({ sessions }: RecentSessionsProps) {
                   fontSize: 12,
                   color: "#666",
                   fontFamily: "var(--font-inter), sans-serif",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
+                {session.type === "music" ? (
+                  <MusicNote size={12} />
+                ) : (
+                  <FilmStrip size={12} />
+                )}
                 {formatDuration(session.duration_minutes)}
               </div>
             </div>

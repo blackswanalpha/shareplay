@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-
-function easeOutExpo(t: number): number {
-  return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
-}
+import { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
 
 interface AnimatedNumberProps {
   value: number;
@@ -15,32 +12,14 @@ interface AnimatedNumberProps {
 
 export function AnimatedNumber({
   value,
-  duration = 1500,
+  duration = 1.5,
   prefix = "",
   suffix = "",
 }: AnimatedNumberProps) {
   const [display, setDisplay] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const hasAnimated = useRef(false);
-
-  const animate = useCallback(() => {
-    if (hasAnimated.current) return;
-    hasAnimated.current = true;
-
-    const start = performance.now();
-
-    function tick(now: number) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOutExpo(progress);
-      setDisplay(Math.round(eased * value));
-      if (progress < 1) {
-        requestAnimationFrame(tick);
-      }
-    }
-
-    requestAnimationFrame(tick);
-  }, [value, duration]);
+  const objRef = useRef({ val: 0 });
 
   useEffect(() => {
     const prefersReduced = window.matchMedia(
@@ -53,9 +32,18 @@ export function AnimatedNumber({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          animate();
+        if (entry.isIntersecting && !hasAnimated.current) {
+          hasAnimated.current = true;
           observer.disconnect();
+
+          gsap.to(objRef.current, {
+            val: value,
+            duration,
+            ease: "expo.out",
+            onUpdate() {
+              setDisplay(Math.round(objRef.current.val));
+            },
+          });
         }
       },
       { threshold: 0.1 }
@@ -66,7 +54,7 @@ export function AnimatedNumber({
     }
 
     return () => observer.disconnect();
-  }, [animate, value]);
+  }, [value, duration]);
 
   return (
     <span ref={ref}>

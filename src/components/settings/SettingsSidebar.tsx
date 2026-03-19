@@ -4,9 +4,13 @@ import {
   User,
   Bell,
   Microphone,
+  VideoCamera,
   Palette,
-  Lock,
   Keyboard,
+  MegaphoneSimple,
+  Lifebuoy,
+  Question,
+  Info,
 } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
@@ -14,15 +18,20 @@ interface SidebarItem {
   key: string;
   label: string;
   icon: ReactNode;
+  dividerBefore?: boolean;
 }
 
 const items: SidebarItem[] = [
   { key: "profile", label: "Profile", icon: <User size={18} /> },
   { key: "notifications", label: "Notifications", icon: <Bell size={18} /> },
   { key: "audio", label: "Audio", icon: <Microphone size={18} /> },
+  { key: "video", label: "Video", icon: <VideoCamera size={18} /> },
   { key: "appearance", label: "Appearance", icon: <Palette size={18} /> },
-  { key: "privacy", label: "Privacy", icon: <Lock size={18} /> },
   { key: "shortcuts", label: "Shortcuts", icon: <Keyboard size={18} /> },
+  { key: "feedback", label: "Feedback", icon: <MegaphoneSimple size={18} />, dividerBefore: true },
+  { key: "help", label: "Help & Support", icon: <Lifebuoy size={18} /> },
+  { key: "faq", label: "FAQ", icon: <Question size={18} /> },
+  { key: "about", label: "About", icon: <Info size={18} /> },
 ];
 
 interface SettingsSidebarProps {
@@ -45,13 +54,23 @@ export function SettingsSidebar({
         flexDirection: "column",
         gap: 2,
         padding: "16px 8px",
+        overflowY: "auto",
       }}
     >
       {items.map((item) => {
         const isActive = item.key === activeSection;
         return (
+          <div key={item.key}>
+            {item.dividerBefore && (
+              <div
+                style={{
+                  height: 1,
+                  background: "rgba(255,255,255,0.06)",
+                  margin: "8px 14px",
+                }}
+              />
+            )}
           <button
-            key={item.key}
             onClick={() => {
               onSectionChange(item.key);
               onMobileClose?.();
@@ -90,6 +109,7 @@ export function SettingsSidebar({
             {item.icon}
             {item.label}
           </button>
+          </div>
         );
       })}
     </nav>

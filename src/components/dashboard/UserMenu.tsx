@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { User as UserIcon, GearSix, SignOut } from "@phosphor-icons/react";
 import type { User } from "@/lib/types";
 import { useAuth } from "@/providers/AuthProvider";
@@ -13,7 +13,6 @@ interface UserMenuProps {
 export function UserMenu({ user }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -84,43 +83,72 @@ export function UserMenu({ user }: UserMenuProps) {
             zIndex: 100,
           }}
         >
-          {menuItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => {
-                if (item.label === "Logout") {
-                  logout();
-                } else if (item.href) {
-                  router.push(item.href);
-                }
-                setOpen(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                width: "100%",
-                padding: "10px 14px",
-                background: "transparent",
-                border: "none",
-                color: item.label === "Logout" ? "#ef4444" : "#f5f5f5",
-                fontSize: 14,
-                cursor: "pointer",
-                borderRadius: 6,
-                transition: "background 0.15s ease",
-                fontFamily: "var(--font-inter), sans-serif",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {menuItems.map((item) =>
+            item.href ? (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "transparent",
+                  border: "none",
+                  color: "#f5f5f5",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  transition: "background 0.15s ease",
+                  fontFamily: "var(--font-inter), sans-serif",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ) : (
+              <button
+                key={item.label}
+                onClick={() => {
+                  if (item.label === "Logout") logout();
+                  setOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "transparent",
+                  border: "none",
+                  color: "#ef4444",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  transition: "background 0.15s ease",
+                  fontFamily: "var(--font-inter), sans-serif",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

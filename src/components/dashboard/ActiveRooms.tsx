@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { useRef, useEffect } from "react";
+import gsap from "gsap";
 import { ActiveRoomCard } from "./ActiveRoomCard";
 import type { Room } from "@/lib/types";
 
@@ -10,7 +11,29 @@ interface ActiveRoomsProps {
 }
 
 export function ActiveRooms({ rooms, onOpenRoom }: ActiveRoomsProps) {
-  const reducedMotion = useReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (prefersReduced || !containerRef.current) return;
+
+    const cards = containerRef.current.children;
+    if (cards.length === 0) return;
+
+    gsap.fromTo(
+      cards,
+      { opacity: 0, y: 14 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.35,
+        stagger: 0.06,
+        ease: "power2.out",
+      }
+    );
+  }, [rooms]);
 
   return (
     <section style={{ marginBottom: 32 }}>
@@ -26,7 +49,8 @@ export function ActiveRooms({ rooms, onOpenRoom }: ActiveRoomsProps) {
         Active Rooms
       </h2>
 
-      <motion.div
+      <div
+        ref={containerRef}
         className="hide-scrollbar"
         style={{
           display: "flex",
@@ -35,21 +59,12 @@ export function ActiveRooms({ rooms, onOpenRoom }: ActiveRoomsProps) {
           paddingBottom: 4,
         }}
       >
-        {rooms.map((room, i) => (
-          <motion.div
-            key={room.id}
-            initial={reducedMotion ? undefined : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={
-              reducedMotion
-                ? undefined
-                : { duration: 0.3, delay: i * 0.06 }
-            }
-          >
+        {rooms.map((room) => (
+          <div key={room.id} style={{ opacity: 0 }}>
             <ActiveRoomCard room={room} onOpen={onOpenRoom} />
-          </motion.div>
+          </div>
         ))}
-      </motion.div>
+      </div>
     </section>
   );
 }
