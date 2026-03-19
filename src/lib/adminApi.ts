@@ -23,6 +23,8 @@ import type {
   EngagementScore,
   LeaderboardEntry,
   ReengagementLog,
+  CampaignTemplate,
+  CampaignAnalytics,
 } from "./adminTypes";
 
 // --- Dashboard ---
@@ -285,3 +287,50 @@ export const adminUpdateRetentionSettings = (data: { enabled?: boolean }) =>
     method: "PUT",
     body: JSON.stringify(data),
   });
+
+// --- Campaign Templates ---
+
+export const adminGetCampaignTemplates = () =>
+  apiFetch<CampaignTemplate[]>("/admin/retention/campaigns/templates");
+
+export const adminCreateCampaignTemplate = (data: {
+  name: string;
+  subject: string;
+  body_template: string;
+  target_filter?: Record<string, unknown>;
+  channel?: string;
+  schedule_cron?: string | null;
+  is_active?: boolean;
+}) =>
+  apiFetch<CampaignTemplate>("/admin/retention/campaigns/templates", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const adminUpdateCampaignTemplate = (id: number, data: {
+  name?: string;
+  subject?: string;
+  body_template?: string;
+  target_filter?: Record<string, unknown>;
+  channel?: string;
+  schedule_cron?: string | null;
+  is_active?: boolean;
+}) =>
+  apiFetch<CampaignTemplate>(`/admin/retention/campaigns/templates/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const adminDeleteCampaignTemplate = (id: number) =>
+  apiFetch<{ message: string }>(`/admin/retention/campaigns/templates/${id}`, {
+    method: "DELETE",
+  });
+
+export const adminTriggerCustomCampaign = (templateId: number, userIds?: number[]) =>
+  apiFetch<{ template_id: number; users_targeted: number; sent: number; failed: number }>(`/admin/retention/campaigns/templates/${templateId}/trigger`, {
+    method: "POST",
+    body: JSON.stringify({ user_ids: userIds }),
+  });
+
+export const adminGetCampaignAnalytics = () =>
+  apiFetch<CampaignAnalytics[]>("/admin/retention/campaigns/analytics");

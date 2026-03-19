@@ -23,8 +23,9 @@ import {
   roomAnnouncementAtom,
   roomAlertsAtom,
   serviceStatusAtom,
+  liveReactionsAtom,
 } from "@/store/roomAtoms";
-import type { RoomParticipant, ChatMessage, QueueTrack, PendingUser, Broadcast } from "@/lib/types";
+import type { RoomParticipant, ChatMessage, QueueTrack, PendingUser, Broadcast, LiveReaction } from "@/lib/types";
 import { toast } from "sonner";
 
 export interface SocketActions {
@@ -55,6 +56,7 @@ export interface SocketActions {
   sendAnnouncement: (title: string, body: string, requiresAck?: boolean) => void;
   dismissAnnouncement: () => void;
   addReaction: (messageId: string, emoji: string) => void;
+  sendLiveReaction: (emoji: string) => void;
 }
 
 export function useSocket(roomId: string): SocketActions {
@@ -74,6 +76,7 @@ export function useSocket(roomId: string): SocketActions {
   const setAnnouncement = useSetAtom(roomAnnouncementAtom);
   const setAlerts = useSetAtom(roomAlertsAtom);
   const setServiceStatus = useSetAtom(serviceStatusAtom);
+  const setLiveReactions = useSetAtom(liveReactionsAtom);
 
   const socketsRef = useRef<{
     manager: Manager;
@@ -342,6 +345,20 @@ export function useSocket(roomId: string): SocketActions {
       if (data.type === "service_status") setServiceStatus(null);
     });
 
+    // --- Live reactions ---
+    roomSocket.on("live_reaction", (data: { user_id: number; username: string; emoji: string }) => {
+      if (cleaned) return;
+      const reaction: LiveReaction = {
+        id: `lr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        emoji: data.emoji,
+        userId: String(data.user_id),
+        username: data.username,
+        x: 5 + Math.random() * 25,
+        createdAt: Date.now(),
+      };
+      setLiveReactions((prev) => [...prev.slice(-29), reaction]);
+    });
+
     // --- /chat namespace ---
     chatSocket.on("connect", () => {
       if (cleaned) return;
@@ -606,8 +623,9 @@ export function useSocket(roomId: string): SocketActions {
       setAnnouncement(null);
       setAlerts([]);
       setServiceStatus(null);
+      setLiveReactions([]);
     };
-  }, [roomId, setParticipants, setMessages, setQueue, setCurrentTrackId, setPendingUsers, setPlayerState, setAudioState, setScreenShare, setCameraShare, setSyncStatus, setSocketConnected, setRoom, setRoomEnded, setAnnouncement, setAlerts, setServiceStatus]);
+  }, [roomId, setParticipants, setMessages, setQueue, setCurrentTrackId, setPendingUsers, setPlayerState, setAudioState, setScreenShare, setCameraShare, setSyncStatus, setSocketConnected, setRoom, setRoomEnded, setAnnouncement, setAlerts, setServiceStatus, setLiveReactions]);
 
   const sendMessage = useCallback((text: string) => {
     const chat = socketsRef.current?.chat;
@@ -797,6 +815,22 @@ export function useSocket(roomId: string): SocketActions {
     chat.emit("add_reaction", { message_id: Number(messageId), emoji });
   }, []);
 
+  const sendLiveReaction = useCallback((emoji: string) => {
+    const room = socketsRef.current?.room;
+    if (!room?.connected) return;
+    room.emit("live_reaction", { room_code: roomId, emoji });
+    // Optimistic local update so user sees own reaction immediately
+    const reaction: LiveReaction = {
+      id: `lr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      emoji,
+      userId: "self",
+      username: "You",
+      x: 5 + Math.random() * 25,
+      createdAt: Date.now(),
+    };
+    setLiveReactions((prev) => [...prev.slice(-29), reaction]);
+  }, [roomId, setLiveReactions]);
+
   return {
     sendMessage,
     emitPlay,
@@ -825,5 +859,6 @@ export function useSocket(roomId: string): SocketActions {
     sendAnnouncement,
     dismissAnnouncement,
     addReaction,
+    sendLiveReaction,
   };
 }

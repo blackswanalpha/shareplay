@@ -104,7 +104,7 @@ function PlaceholderSection({ title }: { title: string }) {
 }
 
 export function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { data: rooms = [] } = useRooms();
   const { data: friends = [] } = useFriends();
   const { data: unreadCount = 0 } = useUnreadCount();
@@ -204,6 +204,7 @@ export function SettingsPage() {
         <SettingsSidebar
           activeSection={activeSection}
           onSectionChange={setActiveSection}
+          onLogout={logout}
           isMobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}
         />

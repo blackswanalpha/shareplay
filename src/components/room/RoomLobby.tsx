@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGetRoom, getAccessToken } from "@/lib/api";
 import { adaptRoom } from "@/lib/adapters";
 import { useUnreadCount } from "@/hooks/useApi";
+import { LobbySkeleton } from "@/components/room/LobbySkeleton";
 import { Manager, type Socket } from "socket.io-client";
 import { API_URL } from "@/lib/config";
 
@@ -112,24 +113,7 @@ export function RoomLobby({ roomId }: RoomLobbyProps) {
   }, []);
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0a0505",
-          backgroundImage: "radial-gradient(circle, rgba(255,66,66,0.05) 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#888",
-          fontSize: 16,
-          fontFamily: "var(--font-inter), sans-serif",
-        }}
-      >
-        Loading...
-      </div>
-    );
+    return <LobbySkeleton />;
   }
 
   if (error || !room || !user) {

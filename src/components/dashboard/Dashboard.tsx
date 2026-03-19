@@ -12,6 +12,7 @@ import {
   useUnreadCount,
   useDashboardStats,
   useJoinRoom,
+  useMyGamification,
 } from "@/hooks/useApi";
 import type { Room } from "@/lib/types";
 
@@ -61,6 +62,11 @@ const CommandPalette = dynamic(
   { ssr: false }
 );
 
+const GamificationPanel = dynamic(
+  () => import("./GamificationPanel").then((m) => m.GamificationPanel),
+  { ssr: false }
+);
+
 const CreateRoomModal = dynamic(
   () => import("./CreateRoomModal").then((m) => m.CreateRoomModal),
   { ssr: false }
@@ -76,6 +82,7 @@ export function Dashboard() {
   const { data: unreadCount = 0 } = useUnreadCount();
   const stats = useDashboardStats();
   const joinRoom = useJoinRoom();
+  const { data: gamification } = useMyGamification();
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
@@ -159,6 +166,8 @@ export function Dashboard() {
         />
 
         <ActiveRooms rooms={rooms} onOpenRoom={handleOpenRoom} />
+
+        {gamification && <GamificationPanel data={gamification} />}
 
         <div
           style={{

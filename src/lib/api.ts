@@ -393,3 +393,13 @@ export function apiGetVideoInfo(url: string): Promise<import("./types").VideoInf
 export function apiGetSessionHistory(): Promise<ApiSession[]> {
   return apiFetch("/sessions/history");
 }
+
+// --- Gamification ---
+
+export function apiGetMyGamification(): Promise<import("./types").GamificationSummary> {
+  return apiFetch("/api/me/gamification");
+}
+
+export function apiGetXPLeaderboard(): Promise<import("./types").UserXP[]> {
+  return apiFetch("/api/leaderboard/xp");
+}

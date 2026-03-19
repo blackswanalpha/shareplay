@@ -2,12 +2,14 @@
 
 import { useRef, useEffect } from "react";
 import gsap from "gsap";
+import AdminDashboardLoading from "./loading";
 import { KPICard } from "@/components/admin/KPICard";
 import { ActivityChart } from "@/components/admin/dashboard/ActivityChart";
 import { SystemStatus } from "@/components/admin/dashboard/SystemStatus";
 import { QuickActions } from "@/components/admin/dashboard/QuickActions";
 import { RecentActivity } from "@/components/admin/dashboard/RecentActivity";
-import { useAdminDashboard } from "@/hooks/useAdminApi";
+import { RetentionWidget } from "@/components/admin/dashboard/RetentionWidget";
+import { useAdminDashboard, useAdminRetentionDashboard } from "@/hooks/useAdminApi";
 import {
   Users,
   Monitor,
@@ -20,6 +22,7 @@ import {
 
 export default function AdminDashboardPage() {
   const { data, isLoading } = useAdminDashboard();
+  const { data: retentionData } = useAdminRetentionDashboard();
   const headerRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
@@ -58,28 +61,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   if (isLoading || !data) {
-    return (
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "60vh",
-        gap: 12,
-      }}>
-        <div style={{
-          width: 20,
-          height: 20,
-          border: "2px solid rgba(255,59,59,0.2)",
-          borderTopColor: "#ff3b3b",
-          borderRadius: "50%",
-          animation: "spin 0.8s linear infinite",
-        }} />
-        <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, fontFamily: "'Inter', sans-serif" }}>
-          Loading dashboard...
-        </span>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    return <AdminDashboardLoading />;
   }
 
   const d = data;
@@ -271,14 +253,17 @@ export default function AdminDashboardPage() {
         delay={0.7}
       />
 
-      {/* Bottom Row: System Status + Quick Actions + Today's Activity */}
+      {/* Bottom Row: System Status + Quick Actions + Today's Activity + Retention */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr",
+        gridTemplateColumns: "1fr 1fr 1fr 1fr",
         gap: 14,
       }}>
         <style>{`
           @media (max-width: 1024px) {
+            .admin-bottom-grid { grid-template-columns: 1fr 1fr !important; }
+          }
+          @media (max-width: 640px) {
             .admin-bottom-grid { grid-template-columns: 1fr !important; }
           }
         `}</style>
@@ -298,6 +283,15 @@ export default function AdminDashboardPage() {
           pendingReports={d.pending_reports}
           delay={1.0}
         />
+        {retentionData && (
+          <RetentionWidget
+            avgScore={retentionData.avg_score}
+            totalScoredUsers={retentionData.total_scored_users}
+            riskDistribution={retentionData.risk_distribution}
+            activeStreaks={retentionData.active_streaks}
+            delay={1.1}
+          />
+        )}
       </div>
 
       {/* Footer timestamp */}

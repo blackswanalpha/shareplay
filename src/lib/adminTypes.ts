@@ -271,3 +271,31 @@ export interface ReengagementLog {
   metadata: Record<string, unknown>;
   sent_at: string;
 }
+
+// --- Campaign Templates ---
+
+export interface CampaignTemplate {
+  id: number;
+  name: string;
+  subject: string;
+  body_template: string;
+  target_filter: Record<string, unknown>;
+  channel: string;
+  schedule_cron: string | null;
+  is_active: boolean;
+  send_count: number;
+  open_count: number;
+  click_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignAnalytics {
+  template_id: number;
+  name: string;
+  send_count: number;
+  open_count: number;
+  click_count: number;
+  open_rate: number;
+  click_rate: number;
+}

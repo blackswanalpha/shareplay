@@ -1,4 +1,6 @@
-export default function LobbyLoading() {
+"use client";
+
+export function LobbySkeleton() {
   return (
     <div
       style={{
@@ -41,7 +43,7 @@ export default function LobbyLoading() {
         </div>
       </div>
 
-      {/* Lobby content — two columns */}
+      {/* Two-column lobby layout */}
       <div
         style={{
           maxWidth: 900,
@@ -52,29 +54,19 @@ export default function LobbyLoading() {
           alignItems: "flex-start",
         }}
       >
-        {/* Preview (left) */}
+        {/* Preview */}
         <div style={{ flex: 1 }}>
-          <div
-            className="lby-skel"
-            style={{
-              width: "100%",
-              aspectRatio: "4/3",
-              borderRadius: 16,
-              marginBottom: 16,
-            }}
-          />
+          <div className="lby-skel" style={{ width: "100%", aspectRatio: "4/3", borderRadius: 16, marginBottom: 16 }} />
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
             <div className="lby-skel" style={{ width: 44, height: 44, borderRadius: "50%" }} />
             <div className="lby-skel" style={{ width: 44, height: 44, borderRadius: "50%" }} />
           </div>
         </div>
 
-        {/* Info (right) */}
+        {/* Info */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="lby-skel" style={{ width: 200, height: 26 }} />
           <div className="lby-skel" style={{ width: 120, height: 14 }} />
-
-          {/* Room details card */}
           <div
             style={{
               padding: 20,
@@ -90,15 +82,11 @@ export default function LobbyLoading() {
             <div className="lby-skel" style={{ width: "50%", height: 14 }} />
             <div className="lby-skel" style={{ width: "60%", height: 14 }} />
           </div>
-
-          {/* Participants */}
           <div style={{ display: "flex", gap: 8 }}>
             {[1, 2, 3].map((i) => (
               <div key={i} className="lby-skel" style={{ width: 32, height: 32, borderRadius: "50%" }} />
             ))}
           </div>
-
-          {/* Join button */}
           <div className="lby-skel" style={{ width: "100%", height: 48, borderRadius: 10 }} />
         </div>
       </div>

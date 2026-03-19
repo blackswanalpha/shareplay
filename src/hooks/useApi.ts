@@ -24,6 +24,8 @@ import {
   apiDeleteAvatar,
   apiGetNotificationPreferences,
   apiUpdateNotificationPreferences,
+  apiGetMyGamification,
+  apiGetXPLeaderboard,
 } from "@/lib/api";
 import {
   adaptRoom,
@@ -276,5 +278,22 @@ export function useUpdateNotificationPreferences() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notification-preferences"] });
     },
+  });
+}
+
+// --- Gamification ---
+
+export function useMyGamification() {
+  return useQuery({
+    queryKey: ["my-gamification"],
+    queryFn: apiGetMyGamification,
+    refetchInterval: 60000,
+  });
+}
+
+export function useXPLeaderboard() {
+  return useQuery({
+    queryKey: ["xp-leaderboard"],
+    queryFn: apiGetXPLeaderboard,
   });
 }

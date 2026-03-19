@@ -85,6 +85,16 @@ const HostLeaveModal = dynamic(
   { ssr: false }
 );
 
+const EmotionBarFAB = dynamic(
+  () => import("./EmotionBarFAB").then((m) => m.EmotionBarFAB),
+  { ssr: false }
+);
+
+const FloatingEmojiOverlay = dynamic(
+  () => import("./FloatingEmojiOverlay").then((m) => m.FloatingEmojiOverlay),
+  { ssr: false }
+);
+
 const ENDED_MESSAGES: Record<string, { title: string; description: string }> = {
   host_left: {
     title: "Room no longer exists",
@@ -308,6 +318,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
           userAvatar={user?.avatar_url ?? ""}
           actions={actions}
         />
+
+        <EmotionBarFAB actions={actions} />
+        <FloatingEmojiOverlay />
 
         {room && (
           <WelcomeModal

@@ -52,6 +52,12 @@ import {
   adminTriggerCampaign,
   adminRecomputeScore,
   adminUpdateRetentionSettings,
+  adminGetCampaignTemplates,
+  adminCreateCampaignTemplate,
+  adminUpdateCampaignTemplate,
+  adminDeleteCampaignTemplate,
+  adminTriggerCustomCampaign,
+  adminGetCampaignAnalytics,
 } from "@/lib/adminApi";
 
 // --- Dashboard ---
@@ -447,5 +453,72 @@ export function useAdminUpdateRetentionSettings() {
   return useMutation({
     mutationFn: (data: { enabled?: boolean }) => adminUpdateRetentionSettings(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "retention-dashboard"] }),
+  });
+}
+
+// --- Campaign Templates ---
+
+export function useAdminCampaignTemplates() {
+  return useQuery({
+    queryKey: ["admin", "campaign-templates"],
+    queryFn: adminGetCampaignTemplates,
+  });
+}
+
+export function useAdminCreateCampaignTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      name: string;
+      subject: string;
+      body_template: string;
+      target_filter?: Record<string, unknown>;
+      channel?: string;
+      schedule_cron?: string | null;
+      is_active?: boolean;
+    }) => adminCreateCampaignTemplate(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-templates"] });
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-analytics"] });
+    },
+  });
+}
+
+export function useAdminUpdateCampaignTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      adminUpdateCampaignTemplate(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaign-templates"] }),
+  });
+}
+
+export function useAdminDeleteCampaignTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => adminDeleteCampaignTemplate(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-templates"] });
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-analytics"] });
+    },
+  });
+}
+
+export function useAdminTriggerCustomCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, userIds }: { templateId: number; userIds?: number[] }) =>
+      adminTriggerCustomCampaign(templateId, userIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-templates"] });
+      qc.invalidateQueries({ queryKey: ["admin", "campaign-analytics"] });
+    },
+  });
+}
+
+export function useAdminCampaignAnalytics() {
+  return useQuery({
+    queryKey: ["admin", "campaign-analytics"],
+    queryFn: adminGetCampaignAnalytics,
   });
 }

@@ -11,6 +11,7 @@ import {
   Lifebuoy,
   Question,
   Info,
+  SignOut,
 } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
@@ -32,11 +33,13 @@ const items: SidebarItem[] = [
   { key: "help", label: "Help & Support", icon: <Lifebuoy size={18} /> },
   { key: "faq", label: "FAQ", icon: <Question size={18} /> },
   { key: "about", label: "About", icon: <Info size={18} /> },
+  { key: "logout", label: "Log Out", icon: <SignOut size={18} />, dividerBefore: true },
 ];
 
 interface SettingsSidebarProps {
   activeSection: string;
   onSectionChange: (key: string) => void;
+  onLogout: () => void;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -44,6 +47,7 @@ interface SettingsSidebarProps {
 export function SettingsSidebar({
   activeSection,
   onSectionChange,
+  onLogout,
   isMobileOpen,
   onMobileClose,
 }: SettingsSidebarProps) {
@@ -59,6 +63,7 @@ export function SettingsSidebar({
     >
       {items.map((item) => {
         const isActive = item.key === activeSection;
+        const isLogout = item.key === "logout";
         return (
           <div key={item.key}>
             {item.dividerBefore && (
@@ -72,7 +77,11 @@ export function SettingsSidebar({
             )}
           <button
             onClick={() => {
-              onSectionChange(item.key);
+              if (isLogout) {
+                onLogout();
+              } else {
+                onSectionChange(item.key);
+              }
               onMobileClose?.();
             }}
             style={{
@@ -80,13 +89,13 @@ export function SettingsSidebar({
               alignItems: "center",
               gap: 10,
               padding: "10px 14px",
-              background: isActive ? "rgba(255,59,59,0.08)" : "transparent",
+              background: isActive && !isLogout ? "rgba(255,59,59,0.08)" : "transparent",
               border: "none",
-              borderLeft: isActive ? "3px solid #ff3b3b" : "3px solid transparent",
+              borderLeft: isActive && !isLogout ? "3px solid #ff3b3b" : "3px solid transparent",
               borderRadius: "0 8px 8px 0",
-              color: isActive ? "#f5f5f5" : "#888",
+              color: isLogout ? "#ef4444" : isActive ? "#f5f5f5" : "#888",
               fontSize: 14,
-              fontWeight: isActive ? 500 : 400,
+              fontWeight: isLogout ? 500 : isActive ? 500 : 400,
               fontFamily: "var(--font-inter), sans-serif",
               cursor: "pointer",
               transition: "all 0.15s ease",
@@ -94,13 +103,19 @@ export function SettingsSidebar({
               textAlign: "left",
             }}
             onMouseEnter={(e) => {
-              if (!isActive) {
+              if (isLogout) {
+                e.currentTarget.style.background = "rgba(239,68,68,0.08)";
+                e.currentTarget.style.color = "#f87171";
+              } else if (!isActive) {
                 e.currentTarget.style.background = "rgba(255,255,255,0.04)";
                 e.currentTarget.style.color = "#bbb";
               }
             }}
             onMouseLeave={(e) => {
-              if (!isActive) {
+              if (isLogout) {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#ef4444";
+              } else if (!isActive) {
                 e.currentTarget.style.background = "transparent";
                 e.currentTarget.style.color = "#888";
               }

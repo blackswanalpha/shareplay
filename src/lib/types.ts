@@ -274,6 +274,17 @@ export interface VideoInfoResponse {
   stream_url: string;
 }
 
+// --- Live reactions (ephemeral floating emojis) ---
+
+export interface LiveReaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  username: string;
+  x: number;
+  createdAt: number;
+}
+
 // --- Audio participant state ---
 
 export interface AudioParticipantState {
@@ -316,6 +327,64 @@ export interface FeedbackFormData {
   rating: number;
   message: string;
   email: string;
+}
+
+// --- Gamification ---
+
+export interface UserXP {
+  user_id: number;
+  username: string;
+  total_xp: number;
+  level: number;
+  weekly_xp: number;
+  xp_to_next_level: number;
+  level_progress_pct: number;
+}
+
+export interface GamificationChallenge {
+  id: number;
+  title: string;
+  description: string | null;
+  challenge_type: string;
+  action_type: string;
+  target_count: number;
+  xp_reward: number;
+  icon: string | null;
+  current_count: number;
+  completed: boolean;
+  active_until: string;
+}
+
+export interface AchievementProgress {
+  id: number;
+  user_id: number;
+  achievement_key: string;
+  achievement_name: string;
+  description: string | null;
+  icon: string | null;
+  category: string;
+  tier: string | null;
+  progress_current: number | null;
+  progress_target: number | null;
+  earned_at: string;
+}
+
+export interface GamificationSummary {
+  xp: UserXP;
+  achievements: AchievementProgress[];
+  active_challenges: GamificationChallenge[];
+  streak: {
+    user_id: number;
+    username: string;
+    current_login_streak: number;
+    longest_login_streak: number;
+    current_activity_streak: number;
+    longest_activity_streak: number;
+    last_login_date: string | null;
+    last_activity_date: string | null;
+  } | null;
+  leaderboard_rank: number;
+  leaderboard_top5: UserXP[];
 }
 
 // --- Broadcast types ---

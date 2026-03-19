@@ -7,6 +7,7 @@ import type {
   PendingUser,
   SyncStatus,
   Broadcast,
+  LiveReaction,
 } from "@/lib/types";
 
 // --- Core state atoms ---
@@ -101,6 +102,10 @@ export const isScreenShareActiveAtom = atom((get) => get(screenShareAtom).isShar
 
 export type RoomEndedReason = "host_left" | "host_disconnected" | "room_ended" | "kicked" | "room_inactive" | null;
 export const roomEndedAtom = atom<RoomEndedReason>(null);
+
+// --- Live reactions atom ---
+
+export const liveReactionsAtom = atom<LiveReaction[]>([]);
 
 // --- Broadcast atoms ---
 
