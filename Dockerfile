@@ -17,7 +17,8 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:7359
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # Stage 4: Production runner
