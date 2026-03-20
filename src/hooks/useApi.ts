@@ -26,6 +26,10 @@ import {
   apiUpdateNotificationPreferences,
   apiGetMyGamification,
   apiGetXPLeaderboard,
+  apiGetBadgeCatalog,
+  apiGetFullChallenges,
+  apiGetFullLeaderboard,
+  apiGetXPBreakdown,
 } from "@/lib/api";
 import {
   adaptRoom,
@@ -295,5 +299,34 @@ export function useXPLeaderboard() {
   return useQuery({
     queryKey: ["xp-leaderboard"],
     queryFn: apiGetXPLeaderboard,
+  });
+}
+
+export function useBadgeCatalog() {
+  return useQuery({
+    queryKey: ["badge-catalog"],
+    queryFn: apiGetBadgeCatalog,
+  });
+}
+
+export function useFullChallenges() {
+  return useQuery({
+    queryKey: ["full-challenges"],
+    queryFn: apiGetFullChallenges,
+    refetchInterval: 60000,
+  });
+}
+
+export function useFullLeaderboard(page = 1) {
+  return useQuery({
+    queryKey: ["full-leaderboard", page],
+    queryFn: () => apiGetFullLeaderboard(page, 20),
+  });
+}
+
+export function useXPBreakdown() {
+  return useQuery({
+    queryKey: ["xp-breakdown"],
+    queryFn: apiGetXPBreakdown,
   });
 }

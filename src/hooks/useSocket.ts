@@ -57,6 +57,7 @@ export interface SocketActions {
   dismissAnnouncement: () => void;
   addReaction: (messageId: string, emoji: string) => void;
   sendLiveReaction: (emoji: string) => void;
+  leaveRoom: () => void;
 }
 
 export function useSocket(roomId: string): SocketActions {
@@ -245,6 +246,29 @@ export function useSocket(roomId: string): SocketActions {
           })));
         }
       }).catch(() => { /* Playlist load failed, items will come via socket */ });
+    });
+
+    roomSocket.on("user_reconnected", (data: { user_id: number; username: string; avatar_url: string | null; role: string }) => {
+      if (cleaned) return;
+      // Silently mark participant as online without triggering join UI
+      setParticipants((prev) => {
+        const existing = prev.find((p) => p.id === String(data.user_id));
+        if (existing) {
+          return prev.map((p) => p.id === String(data.user_id) ? { ...p, is_online: true } : p);
+        }
+        return [...prev, {
+          id: String(data.user_id),
+          username: data.username,
+          avatar_url: resolveAvatarUrl(data.avatar_url ?? null, data.username),
+          is_online: true,
+          role: (data.role === "primary_host" ? "host" : data.role === "co_host" ? "co-host" : "member") as "host" | "co-host" | "member",
+          is_muted: false,
+          is_speaking: false,
+          is_deafened: false,
+          is_screen_sharing: false,
+          is_camera_sharing: false,
+        }];
+      });
     });
 
     roomSocket.on("user_left", (data: { user_id: number }) => {
@@ -581,7 +605,6 @@ export function useSocket(roomId: string): SocketActions {
 
       // Disconnect sockets
       socketsRef.current = null;
-      roomSocket.emit("leave_room", { room_code: roomId });
       roomSocket.removeAllListeners();
       chatSocket.removeAllListeners();
       syncSocket.removeAllListeners();
@@ -815,6 +838,10 @@ export function useSocket(roomId: string): SocketActions {
     chat.emit("add_reaction", { message_id: Number(messageId), emoji });
   }, []);
 
+  const leaveRoom = useCallback(() => {
+    socketsRef.current?.room.emit("leave_room", { room_code: roomId });
+  }, [roomId]);
+
   const sendLiveReaction = useCallback((emoji: string) => {
     const room = socketsRef.current?.room;
     if (!room?.connected) return;
@@ -860,5 +887,6 @@ export function useSocket(roomId: string): SocketActions {
     dismissAnnouncement,
     addReaction,
     sendLiveReaction,
+    leaveRoom,
   };
 }

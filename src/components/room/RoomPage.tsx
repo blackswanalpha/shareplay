@@ -19,6 +19,7 @@ import {
   roomAtom,
   socketConnectedAtom,
   roomEndedAtom,
+  audioStateAtom,
 } from "@/store/roomAtoms";
 import type { RoomEndedReason } from "@/store/roomAtoms";
 
@@ -185,6 +186,41 @@ function RoomEndedScreen({ reason, onBack }: { reason: RoomEndedReason; onBack: 
   );
 }
 
+function RoomConnecting({ roomName }: { roomName: string }) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0a0505",
+        backgroundImage: "radial-gradient(circle, rgba(255,66,66,0.05) 1px, transparent 1px)",
+        backgroundSize: "30px 30px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "var(--font-space-grotesk), sans-serif",
+      }}
+    >
+      <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            border: "3px solid rgba(255, 255, 255, 0.1)",
+            borderTopColor: "rgba(255, 66, 66, 0.7)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+            margin: "0 auto 16px",
+          }}
+        />
+        <p style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: 14 }}>
+          Connecting to {roomName}...
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
+}
+
 interface RoomPageProps {
   roomId: string;
 }
@@ -197,7 +233,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const socketConnected = useAtomValue(socketConnectedAtom);
   const roomEnded = useAtomValue(roomEndedAtom);
   const setRoomEnded = useSetAtom(roomEndedAtom);
-  const [showWelcome, setShowWelcome] = useState(true);
+  const audioState = useAtomValue(audioStateAtom);
+  const [showWelcome, setShowWelcome] = useState(() => !sessionStorage.getItem(`shareplay:welcomed:${roomId}`));
   const [showHostLeave, setShowHostLeave] = useState(false);
 
   // Redirect to auth if not logged in
@@ -216,6 +253,22 @@ export function RoomPage({ roomId }: RoomPageProps) {
   useEffect(() => {
     router.prefetch("/dashboard");
   }, [router]);
+
+  // Save media state before refresh so we can auto-rejoin voice
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem(
+        "shareplay:mediaState",
+        JSON.stringify({
+          wasInVoice: audioState.isInAudio,
+          roomId,
+          timestamp: Date.now(),
+        })
+      );
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [audioState.isInAudio, roomId]);
 
   // Initial room validation via REST
   const { isLoading: roomLoading, error: roomError, data: apiRoom } = useQuery({
@@ -236,6 +289,27 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const cameraShareHook = useCameraShare(actions, user?.id ?? null);
   const { joinVoice, leaveVoice, isInVoice } = useWebRTC(actions);
 
+  // Auto-rejoin voice after refresh if user was in voice
+  useEffect(() => {
+    if (!socketConnected) return;
+    try {
+      const raw = sessionStorage.getItem("shareplay:mediaState");
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      // Only restore if same room and within 30 seconds
+      if (saved.roomId !== roomId) return;
+      if (Date.now() - saved.timestamp > 30_000) return;
+      if (saved.wasInVoice) {
+        const timer = setTimeout(() => joinVoice(), 1500);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // Ignore parse errors
+    } finally {
+      sessionStorage.removeItem("shareplay:mediaState");
+    }
+  }, [socketConnected, roomId, joinVoice]);
+
   const voiceChatValue = useMemo(
     () => ({ joinVoice, leaveVoice, isInVoice }),
     [joinVoice, leaveVoice, isInVoice]
@@ -251,6 +325,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     if (isHost) {
       setShowHostLeave(true);
     } else {
+      actions.leaveRoom();
       router.push("/dashboard");
     }
   };
@@ -270,6 +345,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   if (roomError || !apiRoom) {
     return <RoomEndedScreen reason="room_inactive" onBack={handleBack} />;
+  }
+
+  // Show connecting loader between REST data load and socket connection
+  if (!socketConnected) {
+    return <RoomConnecting roomName={apiRoom.name || roomId} />;
   }
 
   return (
@@ -326,7 +406,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <WelcomeModal
             open={showWelcome}
             room={room}
-            onClose={() => setShowWelcome(false)}
+            onClose={() => {
+              setShowWelcome(false);
+              sessionStorage.setItem(`shareplay:welcomed:${roomId}`, "1");
+            }}
           />
         )}
 
@@ -335,6 +418,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
           onClose={() => setShowHostLeave(false)}
           onConfirm={() => {
             setShowHostLeave(false);
+            actions.leaveRoom();
             router.push("/dashboard");
           }}
         />

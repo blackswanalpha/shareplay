@@ -10,6 +10,7 @@ interface GlassPanelProps {
   borderLeft?: string;
   hoverEffect?: boolean;
   style?: CSSProperties;
+  onClick?: () => void;
 }
 
 export function GlassPanel({
@@ -19,11 +20,13 @@ export function GlassPanel({
   borderLeft,
   hoverEffect = true,
   style,
+  onClick,
 }: GlassPanelProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <div
+      onClick={onClick}
       onMouseEnter={hoverEffect ? () => setHovered(true) : undefined}
       onMouseLeave={hoverEffect ? () => setHovered(false) : undefined}
       style={{

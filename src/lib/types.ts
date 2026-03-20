@@ -385,6 +385,80 @@ export interface GamificationSummary {
   } | null;
   leaderboard_rank: number;
   leaderboard_top5: UserXP[];
+  leaderboard_total_users: number;
+  leaderboard_percentile: number;
+  total_badges: number;
+  earned_badges: number;
+  current_xp_multiplier: number;
+}
+
+export interface BadgeCatalogEntry {
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  category: string;
+  tier: string | null;
+  earned: boolean;
+  earned_at: string | null;
+  progress_current: number;
+  progress_target: number;
+}
+
+export interface BadgeCatalog {
+  categories: Record<string, BadgeCatalogEntry[]>;
+  total_badges: number;
+  earned_badges: number;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: number;
+  username: string;
+  total_xp: number;
+  level: number;
+  weekly_xp: number;
+  xp_to_next_level: number;
+  level_progress_pct: number;
+  total_users?: number;
+  percentile?: number;
+}
+
+export interface LeaderboardPage {
+  entries: LeaderboardEntry[];
+  page: number;
+  per_page: number;
+  total_users: number;
+  user_rank: LeaderboardEntry | null;
+}
+
+export interface ChallengePool {
+  daily: GamificationChallenge[];
+  weekly: GamificationChallenge[];
+  total: number;
+  completed: number;
+}
+
+export interface XPMultiplier {
+  name: string;
+  value: number;
+}
+
+export interface XPMilestone {
+  level: number;
+  xp_required: number;
+  reached: boolean;
+}
+
+export interface XPBreakdown {
+  total_xp: number;
+  level: number;
+  weekly_xp: number;
+  xp_to_next_level: number;
+  level_progress_pct: number;
+  current_multiplier: number;
+  active_multipliers: XPMultiplier[];
+  milestones: XPMilestone[];
 }
 
 // --- Broadcast types ---

@@ -403,3 +403,19 @@ export function apiGetMyGamification(): Promise<import("./types").GamificationSu
 export function apiGetXPLeaderboard(): Promise<import("./types").UserXP[]> {
   return apiFetch("/api/leaderboard/xp");
 }
+
+export function apiGetBadgeCatalog(): Promise<import("./types").BadgeCatalog> {
+  return apiFetch("/api/me/gamification/badges");
+}
+
+export function apiGetFullChallenges(): Promise<import("./types").ChallengePool> {
+  return apiFetch("/api/me/gamification/challenges");
+}
+
+export function apiGetFullLeaderboard(page = 1, perPage = 20): Promise<import("./types").LeaderboardPage> {
+  return apiFetch(`/api/leaderboard/xp/full?page=${page}&per_page=${perPage}`);
+}
+
+export function apiGetXPBreakdown(): Promise<import("./types").XPBreakdown> {
+  return apiFetch("/api/me/gamification/xp-breakdown");
+}

@@ -67,6 +67,11 @@ const GamificationPanel = dynamic(
   { ssr: false }
 );
 
+const GamificationSideSheet = dynamic(
+  () => import("./GamificationSideSheet").then((m) => m.GamificationSideSheet),
+  { ssr: false }
+);
+
 const CreateRoomModal = dynamic(
   () => import("./CreateRoomModal").then((m) => m.CreateRoomModal),
   { ssr: false }
@@ -86,6 +91,8 @@ export function Dashboard() {
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [gamificationOpen, setGamificationOpen] = useState(false);
+  const [gamificationTab, setGamificationTab] = useState<"badges" | "challenges" | "leaderboard" | "xp">("badges");
 
   const handleOpenCmdk = useCallback(() => setCmdkOpen(true), []);
   const handleCloseCmdk = useCallback(() => setCmdkOpen(false), []);
@@ -167,7 +174,15 @@ export function Dashboard() {
 
         <ActiveRooms rooms={rooms} onOpenRoom={handleOpenRoom} />
 
-        {gamification && <GamificationPanel data={gamification} />}
+        {gamification && (
+          <GamificationPanel
+            data={gamification}
+            onOpenSideSheet={(tab) => {
+              setGamificationTab(tab || "badges");
+              setGamificationOpen(true);
+            }}
+          />
+        )}
 
         <div
           style={{
@@ -201,6 +216,12 @@ export function Dashboard() {
         open={createRoomOpen}
         onClose={handleCloseCreateRoom}
         onCreated={handleRoomCreated}
+      />
+
+      <GamificationSideSheet
+        open={gamificationOpen}
+        onClose={() => setGamificationOpen(false)}
+        initialTab={gamificationTab}
       />
     </div>
   );
