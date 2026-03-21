@@ -74,7 +74,9 @@ export async function apiFetch<T>(
     headers.set("Content-Type", "application/json");
   }
 
+  console.debug(`[apiFetch] ${fetchOptions.method ?? "GET"} ${API_URL}${path}`);
   const res = await fetch(`${API_URL}${path}`, { ...fetchOptions, headers });
+  console.debug(`[apiFetch] ${path} → ${res.status}`);
 
   if (res.status === 401 && !noAuth) {
     // Try refresh once

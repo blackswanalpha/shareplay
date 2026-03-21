@@ -166,22 +166,46 @@ export function useSocket(roomId: string): SocketActions {
       participants?: Array<{ user_id: number; username: string; avatar_url?: string | null; role: string }>;
       settings?: Record<string, unknown>;
       sync_state?: { video_url?: string; title?: string; is_playing?: boolean; current_time?: number; duration?: number; sequence_id?: number };
+      streaming_state?: {
+        audio_participants?: Record<string, { user_id?: number; is_muted?: boolean; is_speaking?: boolean }>;
+        camera_sharers?: number[];
+        screen_share?: { user_id: number; username?: string; session_id?: string } | null;
+      };
     }) => {
       if (cleaned) return;
-      // Participants from connection manager
+      const ss = data.streaming_state;
+
+      // Participants from connection manager — use streaming_state for accurate flags
       if (data.participants) {
-        setParticipants(data.participants.map((p): RoomParticipant => ({
-          id: String(p.user_id),
-          username: p.username,
-          avatar_url: resolveAvatarUrl(p.avatar_url ?? null, p.username),
-          is_online: true,
-          role: (p.role === "primary_host" ? "host" : p.role === "co_host" ? "co-host" : "member") as "host" | "co-host" | "member",
-          is_muted: false,
-          is_speaking: false,
-          is_deafened: false,
-          is_screen_sharing: false,
-          is_camera_sharing: false,
-        })));
+        setParticipants(data.participants.map((p): RoomParticipant => {
+          const audioInfo = ss?.audio_participants?.[String(p.user_id)];
+          const isCameraSharing = ss?.camera_sharers?.includes(p.user_id) ?? false;
+          const isScreenSharing = ss?.screen_share?.user_id === p.user_id;
+          return {
+            id: String(p.user_id),
+            username: p.username,
+            avatar_url: resolveAvatarUrl(p.avatar_url ?? null, p.username),
+            is_online: true,
+            role: (p.role === "primary_host" ? "host" : p.role === "co_host" ? "co-host" : "member") as "host" | "co-host" | "member",
+            is_muted: audioInfo?.is_muted ?? false,
+            is_speaking: audioInfo?.is_speaking ?? false,
+            is_deafened: false,
+            is_screen_sharing: isScreenSharing,
+            is_camera_sharing: isCameraSharing,
+          };
+        }));
+      }
+
+      // Set screen share and camera share atoms from streaming_state
+      if (ss?.screen_share) {
+        setScreenShare({
+          isSharing: true,
+          sharerUserId: String(ss.screen_share.user_id),
+          sessionId: ss.screen_share.session_id || null,
+        });
+      }
+      if (ss?.camera_sharers && ss.camera_sharers.length > 0) {
+        setCameraShare({ sharerUserIds: ss.camera_sharers.map(String) });
       }
       // Sync state (current playback)
       if (data.sync_state && data.sync_state.video_url) {

@@ -22,6 +22,7 @@ import {
   audioStateAtom,
 } from "@/store/roomAtoms";
 import type { RoomEndedReason } from "@/store/roomAtoms";
+import { toast } from "sonner";
 
 export const ScreenShareContext = createContext<UseScreenShareReturn>({
   startSharing: async () => {},
@@ -234,6 +235,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const roomEnded = useAtomValue(roomEndedAtom);
   const setRoomEnded = useSetAtom(roomEndedAtom);
   const audioState = useAtomValue(audioStateAtom);
+  const setAudioState = useSetAtom(audioStateAtom);
   const [showWelcome, setShowWelcome] = useState(() => !sessionStorage.getItem(`shareplay:welcomed:${roomId}`));
   const [showHostLeave, setShowHostLeave] = useState(false);
 
@@ -254,22 +256,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     router.prefetch("/dashboard");
   }, [router]);
 
-  // Save media state before refresh so we can auto-rejoin voice
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      sessionStorage.setItem(
-        "shareplay:mediaState",
-        JSON.stringify({
-          wasInVoice: audioState.isInAudio,
-          roomId,
-          timestamp: Date.now(),
-        })
-      );
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [audioState.isInAudio, roomId]);
-
   // Initial room validation via REST
   const { isLoading: roomLoading, error: roomError, data: apiRoom } = useQuery({
     queryKey: ["room", roomId],
@@ -289,9 +275,31 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const cameraShareHook = useCameraShare(actions, user?.id ?? null);
   const { joinVoice, leaveVoice, isInVoice } = useWebRTC(actions);
 
-  // Auto-rejoin voice after refresh if user was in voice
+  // Save full media state before refresh for checkpoint restoration
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem(
+        "shareplay:mediaState",
+        JSON.stringify({
+          wasInVoice: audioState.isInAudio,
+          wasMuted: audioState.isMuted,
+          wasDeafened: audioState.isDeafened,
+          wasSharingCamera: cameraShareHook.isLocalSharing,
+          wasSharingScreen: screenShareHook.isLocalSharing,
+          roomId,
+          timestamp: Date.now(),
+        })
+      );
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [audioState.isInAudio, audioState.isMuted, audioState.isDeafened,
+      cameraShareHook.isLocalSharing, screenShareHook.isLocalSharing, roomId]);
+
+  // Auto-restore media state after refresh using checkpoint
   useEffect(() => {
     if (!socketConnected) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     try {
       const raw = sessionStorage.getItem("shareplay:mediaState");
       if (!raw) return;
@@ -299,16 +307,44 @@ export function RoomPage({ roomId }: RoomPageProps) {
       // Only restore if same room and within 30 seconds
       if (saved.roomId !== roomId) return;
       if (Date.now() - saved.timestamp > 30_000) return;
+
+      // 1. Restore voice/audio with mute and deafen state
       if (saved.wasInVoice) {
-        const timer = setTimeout(() => joinVoice(), 1500);
-        return () => clearTimeout(timer);
+        timers.push(setTimeout(async () => {
+          await joinVoice();
+          if (saved.wasMuted) {
+            actions.toggleMute(true);
+          }
+          if (saved.wasDeafened) {
+            setAudioState((prev) => ({ ...prev, isDeafened: true }));
+          }
+        }, 1500));
+      }
+
+      // 2. Restore camera sharing (getUserMedia works without gesture if permission was granted)
+      if (saved.wasSharingCamera) {
+        timers.push(setTimeout(async () => {
+          try {
+            await cameraShareHook.startCamera();
+          } catch {
+            toast.info("Camera sharing could not be restored. Please re-enable manually.");
+          }
+        }, 2000));
+      }
+
+      // 3. Screen sharing cannot be auto-restored (browser requires user gesture)
+      if (saved.wasSharingScreen) {
+        toast.info("You were sharing your screen. Please re-start screen sharing manually.", {
+          duration: 8000,
+        });
       }
     } catch {
       // Ignore parse errors
     } finally {
       sessionStorage.removeItem("shareplay:mediaState");
     }
-  }, [socketConnected, roomId, joinVoice]);
+    return () => { timers.forEach(clearTimeout); };
+  }, [socketConnected, roomId, joinVoice, actions, cameraShareHook, setAudioState]);
 
   const voiceChatValue = useMemo(
     () => ({ joinVoice, leaveVoice, isInVoice }),

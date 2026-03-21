@@ -33,8 +33,13 @@ export function YouTubeUrlBar({ onPlayNow, onAddToQueue }: YouTubeUrlBarProps) {
     try {
       const info = await apiGetVideoInfo(url.trim());
       setPreview(info);
-    } catch {
-      setError("Could not load video info. Check the URL.");
+    } catch (err) {
+      console.error("[YouTubeUrlBar] apiGetVideoInfo failed:", err);
+      setError(
+        err instanceof Error
+          ? `Failed: ${err.message}`
+          : "Could not load video info. Check the URL."
+      );
     } finally {
       setLoading(false);
     }
