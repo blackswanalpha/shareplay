@@ -173,18 +173,19 @@ export function useCameraShare(
       const sharerId = data.user_id ? String(data.user_id) : null;
       if (sharerId === currentUserId && data.viewer_user_ids) {
         // We are the sharer — create PCs for all current viewers
+        // No peer existence guard — createSharerPC already closes stale PCs
         data.viewer_user_ids.forEach((viewerUid) => {
-          if (!peersRef.current.has(viewerUid)) {
-            createSharerPC(viewerUid);
-          }
+          createSharerPC(viewerUid);
         });
       }
       // Viewers will wait for the offer to arrive via camera_share_signal
     };
 
-    // New viewer joined while sharing — sharer creates a PC for them
+    // New viewer joined (or re-joined after refresh) — sharer creates a fresh PC for them.
+    // No peer existence guard — createSharerPC already closes stale PCs, and a
+    // viewer who refreshed needs a new offer even though the old peer still exists.
     const handleViewerJoined = (data: { user_id: string }) => {
-      if (isLocalSharing && !peersRef.current.has(data.user_id)) {
+      if (isLocalSharing) {
         createSharerPC(data.user_id);
       }
     };

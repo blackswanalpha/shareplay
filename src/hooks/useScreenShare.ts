@@ -66,6 +66,10 @@ export function useScreenShare(
     const stream = localStreamRef.current;
     if (!stream) return;
 
+    // Close existing PC for this viewer if any (stale from viewer refresh)
+    const existing = peersRef.current.get(viewerUserId);
+    if (existing) existing.pc.close();
+
     const pc = new RTCPeerConnection(getIceConfig());
 
     pc.onicecandidate = (event) => {
@@ -169,18 +173,19 @@ export function useScreenShare(
       const sharerId = data.user_id ? String(data.user_id) : null;
       if (sharerId === currentUserId && data.viewer_user_ids) {
         // We are the sharer — create PCs for all current viewers
+        // No peer existence guard — createSharerPC handles closing stale PCs
         data.viewer_user_ids.forEach((viewerUid) => {
-          if (!peersRef.current.has(viewerUid)) {
-            createSharerPC(viewerUid);
-          }
+          createSharerPC(viewerUid);
         });
       }
       // Viewers will wait for the offer to arrive via screen_share_signal
     };
 
-    // New viewer joined while sharing — sharer creates a PC for them
+    // New viewer joined (or re-joined after refresh) — sharer creates a fresh PC for them.
+    // No peer existence guard — a viewer who refreshed needs a new offer even
+    // though the old stale peer still exists in peersRef.
     const handleViewerJoined = (data: { user_id: string }) => {
-      if (isLocalSharing && !peersRef.current.has(data.user_id)) {
+      if (isLocalSharing) {
         createSharerPC(data.user_id);
       }
     };
