@@ -121,14 +121,22 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    let message = "Request failed";
-    if (typeof err.detail === "string") {
-      message = err.detail;
-    } else if (Array.isArray(err.detail) && err.detail.length > 0) {
-      message = err.detail[0].msg || JSON.stringify(err.detail[0]);
-    } else if (err.detail) {
-      message = String(err.detail);
+    const errBody = await res.text().catch(() => "");
+    console.error(`[apiFetch] ${path} failed ${res.status}:`, errBody);
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = JSON.parse(errBody);
+      if (typeof err.detail === "string") {
+        message = err.detail;
+      } else if (Array.isArray(err.detail) && err.detail.length > 0) {
+        message = err.detail[0].msg || JSON.stringify(err.detail[0]);
+      } else if (err.detail) {
+        message = String(err.detail);
+      } else if (err.error) {
+        message = err.error;
+      }
+    } catch {
+      if (errBody) message = errBody.slice(0, 200);
     }
     throw new ApiError(res.status, message);
   }
