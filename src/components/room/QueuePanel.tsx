@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { queueAtom, playerStateAtom } from "@/store/roomAtoms";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
+import { apiGetVideoInfo } from "@/lib/api";
 import type { SocketActions } from "@/hooks/useSocket";
 
 interface QueuePanelProps {
@@ -33,6 +34,7 @@ export function QueuePanel({ actions }: QueuePanelProps) {
   const playerState = useAtomValue(playerStateAtom);
   const { canSubmitMedia } = useCurrentRole();
   const [urlInput, setUrlInput] = useState("");
+  const [addingUrl, setAddingUrl] = useState(false);
   const [recentExpanded, setRecentExpanded] = useState(false);
 
   const upNextItems = queue.filter(
@@ -47,11 +49,23 @@ export function QueuePanel({ actions }: QueuePanelProps) {
       ? (playerState.currentTime / playerState.duration) * 100
       : 0;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmed = urlInput.trim();
-    if (!trimmed) return;
-    actions.addToPlaylist(trimmed);
+    if (!trimmed || addingUrl) return;
+    setAddingUrl(true);
+    try {
+      const info = await apiGetVideoInfo(trimmed);
+      actions.addToPlaylist(trimmed, {
+        title: info.title,
+        thumbnail_url: info.thumbnail_url,
+        duration_seconds: info.duration_seconds,
+      });
+    } catch {
+      // Fallback: add with just the URL, backend will use "Untitled"
+      actions.addToPlaylist(trimmed);
+    }
     setUrlInput("");
+    setAddingUrl(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -37,7 +37,7 @@ export interface SocketActions {
   joinAudio: () => void;
   leaveAudio: () => void;
   toggleMute: (muted: boolean) => void;
-  addToPlaylist: (url: string) => void;
+  addToPlaylist: (url: string, meta?: { title?: string; thumbnail_url?: string; duration_seconds?: number }) => void;
   votePlaylistItem: (trackId: string, vote: "up" | "down") => void;
   skipTrack: () => void;
   playNext: () => void;
@@ -794,8 +794,14 @@ export function useSocket(roomId: string): SocketActions {
     setAudioState((prev) => ({ ...prev, isMuted: muted }));
   }, [roomId, setAudioState]);
 
-  const addToPlaylist = useCallback((url: string) => {
-    socketsRef.current?.sync.emit("playlist_add", { room_code: roomId, url });
+  const addToPlaylist = useCallback((url: string, meta?: { title?: string; thumbnail_url?: string; duration_seconds?: number }) => {
+    socketsRef.current?.sync.emit("playlist_add", {
+      room_code: roomId,
+      url,
+      ...(meta?.title && { title: meta.title }),
+      ...(meta?.thumbnail_url && { thumbnail_url: meta.thumbnail_url }),
+      ...(meta?.duration_seconds != null && { duration_seconds: meta.duration_seconds }),
+    });
   }, [roomId]);
 
   const votePlaylistItem = useCallback((trackId: string, vote: "up" | "down") => {

@@ -60,8 +60,8 @@ export function RoomMainContent({ actions }: RoomMainContentProps) {
     actions.emitChangeMedia(url, title);
   };
 
-  const handleAddToQueue = (url: string) => {
-    actions.addToPlaylist(url);
+  const handleAddToQueue = (url: string, meta?: { title?: string; thumbnail_url?: string; duration_seconds?: number }) => {
+    actions.addToPlaylist(url, meta);
   };
 
   return (

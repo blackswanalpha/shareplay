@@ -7,7 +7,7 @@ import type { VideoInfoResponse } from "@/lib/types";
 
 interface YouTubeUrlBarProps {
   onPlayNow: (url: string, title: string) => void;
-  onAddToQueue: (url: string) => void;
+  onAddToQueue: (url: string, meta?: { title?: string; thumbnail_url?: string; duration_seconds?: number }) => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -62,7 +62,11 @@ export function YouTubeUrlBar({ onPlayNow, onAddToQueue }: YouTubeUrlBarProps) {
 
   const handleAddToQueue = () => {
     if (preview) {
-      onAddToQueue(url.trim());
+      onAddToQueue(url.trim(), {
+        title: preview.title,
+        thumbnail_url: preview.thumbnail_url,
+        duration_seconds: preview.duration_seconds,
+      });
       setPreview(null);
       setUrl("");
     }
