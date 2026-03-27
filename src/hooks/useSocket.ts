@@ -38,6 +38,8 @@ export interface SocketActions {
   leaveAudio: () => void;
   toggleMute: (muted: boolean) => void;
   addToPlaylist: (url: string, meta?: { title?: string; thumbnail_url?: string; duration_seconds?: number }) => void;
+  removeFromPlaylist: (trackId: string) => void;
+  playPlaylistItem: (trackId: string) => void;
   votePlaylistItem: (trackId: string, vote: "up" | "down") => void;
   skipTrack: () => void;
   playNext: () => void;
@@ -804,6 +806,14 @@ export function useSocket(roomId: string): SocketActions {
     });
   }, [roomId]);
 
+  const removeFromPlaylist = useCallback((trackId: string) => {
+    socketsRef.current?.sync.emit("playlist_remove", { room_code: roomId, item_id: trackId });
+  }, [roomId]);
+
+  const playPlaylistItem = useCallback((trackId: string) => {
+    socketsRef.current?.sync.emit("playlist_play_item", { room_code: roomId, item_id: trackId });
+  }, [roomId]);
+
   const votePlaylistItem = useCallback((trackId: string, vote: "up" | "down") => {
     socketsRef.current?.sync.emit("playlist_vote", { room_code: roomId, item_id: trackId, vote: vote === "up" ? 1 : -1 });
   }, [roomId]);
@@ -944,6 +954,8 @@ export function useSocket(roomId: string): SocketActions {
     leaveAudio,
     toggleMute,
     addToPlaylist,
+    removeFromPlaylist,
+    playPlaylistItem,
     votePlaylistItem,
     skipTrack,
     playNext,

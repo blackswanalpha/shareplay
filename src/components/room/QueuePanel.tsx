@@ -8,6 +8,7 @@ import {
   Trash,
   Link,
   Plus,
+  Play,
   DotsSixVertical,
   CaretUp,
   CaretDown,
@@ -399,10 +400,33 @@ export function QueuePanel({ actions }: QueuePanelProps) {
             borderRadius: 10,
           }}
         >
-          <DotsSixVertical
-            size={16}
-            style={{ color: "#333", flexShrink: 0, cursor: "grab" }}
-          />
+          {/* Play button */}
+          <button
+            onClick={() => actions.playPlaylistItem(track.id)}
+            aria-label="Play now"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              background: "rgba(255,66,66,0.1)",
+              border: "1px solid rgba(255,66,66,0.2)",
+              borderRadius: 6,
+              color: "#ff4242",
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,66,66,0.25)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,66,66,0.1)";
+            }}
+          >
+            <Play size={14} weight="fill" />
+          </button>
           {track.album_art_url && (
             <img
               src={track.album_art_url}
@@ -519,6 +543,7 @@ export function QueuePanel({ actions }: QueuePanelProps) {
 
           {/* Remove button */}
           <button
+            onClick={() => actions.removeFromPlaylist(track.id)}
             aria-label="Remove"
             style={{
               display: "flex",
