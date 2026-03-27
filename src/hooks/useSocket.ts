@@ -531,10 +531,11 @@ export function useSocket(roomId: string): SocketActions {
     syncSocket.on("playlist_updated", (data: { action: string; item: { id: string; title: string; url: string; duration_seconds: number; thumbnail_url?: string; added_by_username?: string; votes?: number } }) => {
       if (cleaned) return;
       if (data.action === "add" && data.item) {
+        const itemId = String(data.item.id);
         setQueue((prev) => {
-          if (prev.some((t) => t.id === data.item.id)) return prev;
+          if (prev.some((t) => t.id === itemId)) return prev;
           return [...prev, {
-            id: data.item.id,
+            id: itemId,
             title: data.item.title,
             artist: data.item.added_by_username || "",
             album_art_url: data.item.thumbnail_url || "",
@@ -545,10 +546,12 @@ export function useSocket(roomId: string): SocketActions {
           }];
         });
       } else if (data.action === "remove" && data.item) {
-        setQueue((prev) => prev.filter((t) => t.id !== data.item.id));
+        const itemId = String(data.item.id);
+        setQueue((prev) => prev.filter((t) => t.id !== itemId));
       } else if (data.action === "vote" && data.item) {
+        const itemId = String(data.item.id);
         setQueue((prev) => prev.map((t) =>
-          t.id === data.item.id
+          t.id === itemId
             ? { ...t, vote_score: data.item.votes ?? t.vote_score }
             : t
         ));
