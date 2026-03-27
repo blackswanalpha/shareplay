@@ -127,6 +127,7 @@ export interface ChatMessage {
 
 export interface QueueTrack {
   id: string;
+  url: string;
   title: string;
   artist: string;
   album_art_url: string;

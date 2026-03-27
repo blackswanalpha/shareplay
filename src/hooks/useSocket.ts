@@ -263,6 +263,7 @@ export function useSocket(roomId: string): SocketActions {
         if (items && items.length > 0) {
           setQueue(items.map((item): QueueTrack => ({
             id: String(item.id),
+            url: item.url,
             title: item.title,
             artist: item.added_by_username || "",
             album_art_url: item.thumbnail_url || "",
@@ -536,6 +537,7 @@ export function useSocket(roomId: string): SocketActions {
           if (prev.some((t) => t.id === itemId)) return prev;
           return [...prev, {
             id: itemId,
+            url: data.item.url || "",
             title: data.item.title,
             artist: data.item.added_by_username || "",
             album_art_url: data.item.thumbnail_url || "",

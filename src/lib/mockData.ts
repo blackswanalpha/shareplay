@@ -375,6 +375,7 @@ export const mockChatMessages: ChatMessage[] = [
 export const mockQueue: QueueTrack[] = [
   {
     id: "q1",
+    url: "",
     title: "Midnight Lo-fi",
     artist: "ChillBeats",
     album_art_url: avatar("lofi1"),
@@ -383,6 +384,7 @@ export const mockQueue: QueueTrack[] = [
   },
   {
     id: "q2",
+    url: "",
     title: "Rainy Day Vibes",
     artist: "AmbientWave",
     album_art_url: avatar("lofi2"),
@@ -391,6 +393,7 @@ export const mockQueue: QueueTrack[] = [
   },
   {
     id: "q3",
+    url: "",
     title: "Sunset Drive",
     artist: "RetroSynth",
     album_art_url: avatar("lofi3"),
@@ -399,6 +402,7 @@ export const mockQueue: QueueTrack[] = [
   },
   {
     id: "q4",
+    url: "",
     title: "Coffee Shop Jazz",
     artist: "MellowKeys",
     album_art_url: avatar("lofi4"),
@@ -407,6 +411,7 @@ export const mockQueue: QueueTrack[] = [
   },
   {
     id: "q5",
+    url: "",
     title: "Ocean Breeze",
     artist: "NatureSounds",
     album_art_url: avatar("lofi5"),

@@ -402,7 +402,10 @@ export function QueuePanel({ actions }: QueuePanelProps) {
         >
           {/* Play button */}
           <button
-            onClick={() => actions.playPlaylistItem(track.id)}
+            onClick={() => {
+              actions.emitChangeMedia(track.url, track.title);
+              actions.playPlaylistItem(track.id);
+            }}
             aria-label="Play now"
             style={{
               display: "flex",
