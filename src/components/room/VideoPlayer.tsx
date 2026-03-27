@@ -80,7 +80,7 @@ export function VideoPlayer({ actions }: VideoPlayerProps) {
   }, [duration, actions]);
 
   const handleEnded = useCallback(() => {
-    actions.skipTrack();
+    actions.playNext();
   }, [actions]);
 
   const handleDurationChange = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {

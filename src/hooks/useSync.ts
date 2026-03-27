@@ -51,7 +51,7 @@ export function useSync({ actions, playerRef }: UseSyncOptions) {
   }, [actions]);
 
   const handleEnded = useCallback(() => {
-    actions.skipTrack();
+    actions.playNext();
   }, [actions]);
 
   return {

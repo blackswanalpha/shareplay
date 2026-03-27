@@ -57,7 +57,7 @@ export function MusicPlayer({ actions }: MusicPlayerProps) {
       html5: true,
       volume,
       onend: () => {
-        actions.skipTrack();
+        actions.playNext();
       },
       onload: () => {
         const d = sound.duration();

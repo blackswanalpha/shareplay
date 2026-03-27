@@ -40,6 +40,7 @@ export interface SocketActions {
   addToPlaylist: (url: string) => void;
   votePlaylistItem: (trackId: string, vote: "up" | "down") => void;
   skipTrack: () => void;
+  playNext: () => void;
   approveJoin: (userId: string) => void;
   declineJoin: (userId: string) => void;
   assignRole: (targetUserId: string, role: string) => void;
@@ -552,6 +553,47 @@ export function useSocket(roomId: string): SocketActions {
       }
     });
 
+    syncSocket.on("playlist_now_playing", (data: { now_playing: { id: number; url: string; title: string; thumbnail_url?: string; duration_seconds?: number; added_by_username?: string; status: string } | null }) => {
+      if (cleaned) return;
+      const np = data.now_playing;
+      // Update queue statuses: mark old playing as played, mark new as playing
+      setQueue((prev) => prev.map((t) => {
+        if (np && String(np.id) === t.id) {
+          return { ...t, status: "playing" as const };
+        }
+        if (t.status === "playing") {
+          return { ...t, status: "played" as const };
+        }
+        return t;
+      }));
+      // Update player state to switch to the next video
+      if (np) {
+        sequenceRef.current += 1;
+        setPlayerState({
+          isPlaying: true,
+          currentTime: 0,
+          videoUrl: np.url,
+          title: np.title,
+          subtitle: np.added_by_username || "",
+          thumbnailUrl: np.thumbnail_url || "",
+          duration: np.duration_seconds ?? 0,
+          sequenceId: sequenceRef.current,
+        });
+      } else {
+        // Queue exhausted — stop playback
+        setPlayerState({
+          isPlaying: false,
+          currentTime: 0,
+          videoUrl: "",
+          title: "",
+          subtitle: "",
+          thumbnailUrl: "",
+          duration: 0,
+          sequenceId: sequenceRef.current,
+        });
+      }
+    });
+
     // --- /audio namespace ---
     audioSocket.on("connect", () => {
       if (cleaned) return;
@@ -764,6 +806,10 @@ export function useSocket(roomId: string): SocketActions {
     socketsRef.current?.sync.emit("playlist_skip", { room_code: roomId });
   }, [roomId]);
 
+  const playNext = useCallback(() => {
+    socketsRef.current?.sync.emit("playlist_next", { room_code: roomId });
+  }, [roomId]);
+
   const approveJoin = useCallback((userId: string) => {
     socketsRef.current?.room.emit("approve_join", { user_id: Number(userId) });
     setPendingUsers((prev) => prev.filter((p) => p.id !== userId));
@@ -894,6 +940,7 @@ export function useSocket(roomId: string): SocketActions {
     addToPlaylist,
     votePlaylistItem,
     skipTrack,
+    playNext,
     approveJoin,
     declineJoin,
     assignRole,
